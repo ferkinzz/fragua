@@ -58,3 +58,20 @@
 .align-grid button { min-height: 40px; border: 1px solid var(--line); background: #fff; }
 .align-grid button:hover { border-color: var(--ink); background: var(--wash); }
 .align-grid svg { width: 18px; }
+
+.effect-row {
+  min-height: 40px;
+  margin: 10px 0 0;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  background: var(--wash);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.effect-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); font-weight: 700; }
+.effect-row input { width: 17px; min-height: 17px; accent-color: var(--accent); }
+.shadow-slider { margin-top: 8px; }
