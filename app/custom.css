@@ -79,7 +79,7 @@
 .secondary-size { width: 100%; min-height: 36px; margin-top: 6px; border: 1px solid var(--line); background: #fff; font-weight: 700; }
 .save-time { color: var(--muted); font-size: 11px; }
 .export-select { width: 112px; }
-.stage-column { grid-template-rows: 48px minmax(0, 1fr) 116px 32px; }
+.stage-column { min-height: 0; height: 100%; overflow: hidden; grid-template-rows: 48px minmax(0, 1fr) 112px 32px; }
 .page-strip { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 8px 12px; background: #fff; border-top: 1px solid var(--line); }
 .add-page { flex: none; width: 72px; height: 74px; border: 1px dashed var(--line); background: var(--wash); display: grid; place-items: center; font-size: 11px; }
 .add-page svg { width: 18px; }
@@ -167,6 +167,6 @@
 .button.danger:hover { background: #fee4e2; }
 @media(max-width:600px){.brand-color-editors{grid-template-columns:repeat(3,1fr)}.asset-upload-grid{grid-template-columns:1fr}.asset-preview{grid-template-columns:repeat(4,1fr)}}
 
-.stage { display: block; cursor: grab; overscroll-behavior: contain; }
+.stage { min-height: 0; display: grid; place-items: safe center; overflow: auto; cursor: grab; overscroll-behavior: contain; }
 .stage.is-panning { cursor: grabbing; user-select: none; }
-.stage .canvas-frame { margin: 0 auto; }
+.stage .canvas-frame { margin: 24px auto; }
