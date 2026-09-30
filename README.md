@@ -66,7 +66,7 @@ Cada recurso puede tener sus propios términos, atribución o licencia. Revisa l
 
 ## Wiki
 
-La guía de uso está disponible en la ruta `/wiki` al iniciar la aplicación. Incluye los gestos básicos, atajos, organización de páginas, guardado y exportación.
+La guía de uso está disponible en la ruta `/wiki` al iniciar la aplicación. Incluye los gestos básicos, atajos, organización de páginas, guardado y exportación. La versión publicada está en [fragua.rtsi.site](https://fragua.rtsi.site) y su guía en [fragua.rtsi.site/wiki](https://fragua.rtsi.site/wiki).
 
 ## Proyecto y contribuciones
 

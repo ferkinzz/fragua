@@ -1,6 +1,11 @@
 import InfoPage from '@/components/InfoPage';
+import type { Metadata } from 'next';
 
-export const metadata = { title: 'Wiki · Fragua', description: 'Guía rápida de Fragua: editor gráfico abierto, local y sin cuentas.' };
+export const metadata: Metadata = {
+  title: 'Wiki',
+  description: 'Aprende a crear, editar, guardar y exportar diseños con Fragua.',
+  alternates: { canonical: '/wiki' },
+};
 
 export default function WikiPage() {
   return <InfoPage eyebrow="Guía de uso" title="Tu lienzo, a tu manera." description="Una guía breve para crear piezas gráficas, organizar páginas y preparar tus archivos de salida.">

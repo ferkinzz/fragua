@@ -1,6 +1,11 @@
 import InfoPage from '@/components/InfoPage';
+import type { Metadata } from 'next';
 
-export const metadata = { title: 'Créditos y avisos · Fragua', description: 'Agradecimientos, atribuciones de software y notas de privacidad de Fragua.' };
+export const metadata: Metadata = {
+  title: 'Créditos y avisos',
+  description: 'Licencias de software, créditos y notas de privacidad de Fragua.',
+  alternates: { canonical: '/legal' },
+};
 
 const projects = [
   { name: 'Fabric.js', detail: 'Lienzo interactivo y objetos editables · MIT', href: 'https://github.com/fabricjs/fabric.js' },
