@@ -65,8 +65,15 @@ export default function Editor() {
   const attachCrop = useCallback((c: fabric.Canvas) => {
     c.getObjects('image').forEach((object) => {
       object.off('mousedblclick', enterCropMode);
-      object.on('mousedblclick', enterCropMode);
+      object.once('mousedblclick', enterCropMode);
     });
+  }, []);
+
+  const refreshCroppedImage = useCallback((object?: fabric.FabricObject) => {
+    if (!object || object.type !== 'image') return;
+    object.dirty = true;
+    object.setCoords();
+    object.canvas?.requestRenderAll();
   }, []);
 
   useEffect(() => {
@@ -94,7 +101,11 @@ export default function Editor() {
       if (nearY !== undefined) { snapY = nearY; object.setPositionByOrigin(new fabric.Point(object.getCenterPoint().x, nearY), 'center', 'center'); }
       snapGuides.current = { x: snapX, y: snapY }; c.requestRenderAll();
     });
-    c.on('mouse:up', () => { snapGuides.current = {}; c.requestRenderAll(); });
+    c.on('mouse:up', (event) => { snapGuides.current = {}; refreshCroppedImage(event.target); c.requestRenderAll(); });
+    c.on('mouse:dblclick', (event) => {
+      const target = event.target;
+      requestAnimationFrame(() => refreshCroppedImage(target));
+    });
     c.on('after:render', () => {
       const context = c.getTopContext(); const { x, y } = snapGuides.current;
       context.save(); context.strokeStyle = '#ff4d6d'; context.lineWidth = 2; context.setLineDash([10, 8]);
@@ -142,7 +153,7 @@ export default function Editor() {
   function alignSelection(mode: 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom') { const c = canvas.current; const active = c?.getActiveObject(); if (!c || !active || active.type !== 'activeselection') return; const objects = (active as fabric.ActiveSelection).getObjects(); const rects = objects.map((object) => ({ object, rect: object.getBoundingRect() })); const left = Math.min(...rects.map(({ rect }) => rect.left)); const right = Math.max(...rects.map(({ rect }) => rect.left + rect.width)); const top = Math.min(...rects.map(({ rect }) => rect.top)); const bottom = Math.max(...rects.map(({ rect }) => rect.top + rect.height)); rects.forEach(({ object, rect }) => { let dx = 0; let dy = 0; if (mode === 'left') dx = left - rect.left; if (mode === 'centerH') dx = (left + right) / 2 - (rect.left + rect.width / 2); if (mode === 'right') dx = right - (rect.left + rect.width); if (mode === 'top') dy = top - rect.top; if (mode === 'centerV') dy = (top + bottom) / 2 - (rect.top + rect.height / 2); if (mode === 'bottom') dy = bottom - (rect.top + rect.height); object.set({ left: (object.left ?? 0) + dx, top: (object.top ?? 0) + dy }); object.setCoords(); }); active.setCoords(); c.requestRenderAll(); snapshot(); }
   function groupSelection() { const c = canvas.current; const active = c?.getActiveObject(); if (!c || !active || active.type !== 'activeselection') return; const objects = (active as fabric.ActiveSelection).getObjects().slice(); c.discardActiveObject(); c.remove(...objects); const group = new fabric.Group(objects); c.add(group); c.setActiveObject(group); c.requestRenderAll(); snapshot(); syncUi(); setStatus(`${objects.length} elementos agrupados`); }
   function ungroupSelection() { const c = canvas.current; const active = c?.getActiveObject(); if (!c || !active || active.type !== 'group') return; const objects = (active as fabric.Group).removeAll(); c.remove(active); c.add(...objects); c.setActiveObject(new fabric.ActiveSelection(objects, { canvas: c })); c.requestRenderAll(); snapshot(); syncUi(); setStatus(`${objects.length} elementos desagrupados`); }
-  function cropSelected() { const o = canvas.current?.getActiveObject(); if (!o || o.type !== 'image') { setStatus('Selecciona una imagen para recortarla'); return; } enterCropMode.call(enterCropMode, { target: o } as fabric.TPointerEventInfo); setStatus('Modo recorte activo · doble clic para terminar'); }
+  function cropSelected() { const o = canvas.current?.getActiveObject(); if (!o || o.type !== 'image') { setStatus('Selecciona una imagen para recortarla'); return; } o.off('mousedblclick', enterCropMode); enterCropMode.call(enterCropMode, { target: o } as fabric.TPointerEventInfo); refreshCroppedImage(o); setStatus('Modo recorte activo · doble clic para terminar'); }
   function toggleSnapping() { const next = !snappingRef.current; snappingRef.current = next; setSnapping(next); snapGuides.current = {}; canvas.current?.requestRenderAll(); setStatus(next ? 'Ajuste magnético activado' : 'Ajuste magnético desactivado'); }
   async function saveProject() { const c = canvas.current; if (!c) return; setStatus('Guardando…'); const response = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: projectId, name, width: size.w, height: size.h, background: c.backgroundColor, canvas: c.toJSON() }) }); const result = await response.json(); setProjectId(result.id); setStatus(`Guardado en data/projects/${result.id}.json`); await refreshProjects(); }
   async function loadProject(id: string) { if (!id || !canvas.current) return; setStatus('Abriendo…'); const data = await (await fetch(`/api/projects/${id}`)).json(); restoring.current = true; resize(data.width, data.height); await canvas.current.loadFromJSON(data.canvas); attachCrop(canvas.current); canvas.current.backgroundColor = data.background; canvas.current.requestRenderAll(); restoring.current = false; setProjectId(data.id); setName(data.name); history.current = []; historyIndex.current = -1; snapshot(); syncUi(); setStatus('Proyecto abierto'); }
