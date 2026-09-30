@@ -201,6 +201,45 @@ export default function Editor() {
 
   useEffect(() => { const key = (e: KeyboardEvent) => { if ((e.target as HTMLElement)?.matches('input, textarea, select')) return; if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); void travel(e.shiftKey ? 1 : -1); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void saveProject(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); void duplicate(); } if ((e.key === 'Delete' || e.key === 'Backspace')) remove(); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); });
   useEffect(() => { const timer = window.setInterval(() => { if (projectId) void saveProject(true); }, 60_000); return () => window.clearInterval(timer); });
+  useEffect(() => {
+    const selector = 'aside.sidebar > section';
+    const initialize = () => {
+      const sections = [...document.querySelectorAll<HTMLElement>(selector)];
+      sections.forEach((section) => {
+        if (section.dataset.accordionReady) return;
+        section.dataset.accordionReady = 'true';
+        section.classList.add('accordion-section');
+        const heading = section.querySelector<HTMLElement>(':scope > h2');
+        if (!heading) return;
+        heading.setAttribute('role', 'button');
+        heading.tabIndex = 0;
+        const shouldOpen = document.querySelectorAll(`${selector}.accordion-open`).length < 2;
+        section.classList.toggle('accordion-open', shouldOpen);
+        heading.setAttribute('aria-expanded', String(shouldOpen));
+      });
+    };
+    const toggle = (heading: HTMLElement) => {
+      const section = heading.parentElement;
+      if (!section?.matches(selector)) return;
+      const opening = !section.classList.contains('accordion-open');
+      if (opening) {
+        const open = [...document.querySelectorAll<HTMLElement>(`${selector}.accordion-open`)].filter((item) => item !== section);
+        while (open.length >= 2) {
+          const oldest = open.shift();
+          oldest?.classList.remove('accordion-open');
+          oldest?.querySelector(':scope > h2')?.setAttribute('aria-expanded', 'false');
+        }
+      }
+      section.classList.toggle('accordion-open', opening);
+      heading.setAttribute('aria-expanded', String(opening));
+    };
+    const click = (event: Event) => { const heading = (event.target as HTMLElement).closest<HTMLElement>('aside.sidebar > section > h2'); if (heading) toggle(heading); };
+    const key = (event: KeyboardEvent) => { const heading = (event.target as HTMLElement).closest<HTMLElement>('aside.sidebar > section > h2'); if (heading && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggle(heading); } };
+    initialize();
+    const observer = new MutationObserver(initialize); observer.observe(document.querySelector('.workspace') || document.body, { childList: true, subtree: true });
+    document.addEventListener('click', click); document.addEventListener('keydown', key);
+    return () => { observer.disconnect(); document.removeEventListener('click', click); document.removeEventListener('keydown', key); };
+  }, []);
 
   return <main className="app-shell">
     <header className="topbar">
