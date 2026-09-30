@@ -104,3 +104,11 @@
 .layer-main > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media(max-width:680px){.stage-column{height:82vh;grid-template-rows:48px minmax(0,1fr) 104px 32px}.save-time,.export-select{display:none}}
+
+.media-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 8px; }
+.media-tabs button { min-height: 34px; border: 1px solid var(--line); background: #fff; }
+.media-tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.icon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; max-height: 280px; overflow: auto; }
+.icon-grid button { min-width: 0; aspect-ratio: 1; border: 1px solid var(--line); background: #fff; padding: 7px; display: grid; place-items: center; gap: 3px; }
+.icon-grid img { width: 28px; height: 28px; }
+.icon-grid span { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
