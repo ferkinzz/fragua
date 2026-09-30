@@ -5,8 +5,13 @@ node_modules/
 !.env.example
 .DS_Store
 data/projects/*.json
+data/projects/.versions/
 data/assets/*
 data/exports/*
+data/templates/*.json
+data/brands/*.json
 !data/projects/.gitkeep
 !data/assets/.gitkeep
 !data/exports/.gitkeep
+!data/templates/.gitkeep
+!data/brands/.gitkeep
