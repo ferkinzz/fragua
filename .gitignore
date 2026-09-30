@@ -1,0 +1,12 @@
+node_modules/
+.next/
+*.log
+.env*
+!.env.example
+.DS_Store
+data/projects/*.json
+data/assets/*
+data/exports/*
+!data/projects/.gitkeep
+!data/assets/.gitkeep
+!data/exports/.gitkeep
