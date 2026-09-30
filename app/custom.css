@@ -122,3 +122,36 @@
 .accordion-section.accordion-open > :not(h2) { width: calc(100% - 36px); max-width: calc(100% - 36px); margin-left: 18px; margin-right: 18px; }
 .accordion-section.accordion-open > :last-child { margin-bottom: 18px; }
 .accordion-section.accordion-open > h2 + * { margin-top: 0; }
+
+.brand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.brand-card { min-width: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); background: #fff; text-align: left; }
+.brand-card:hover { border-color: var(--ink); transform: translateY(-1px); }
+.brand-visual { position: relative; aspect-ratio: 4/3; overflow: hidden; background: var(--wash); }
+.brand-visual > img,.brand-visual > span { width: 100%; height: 100%; display: block; object-fit: cover; }
+.brand-colors { position: absolute; left: 6px; bottom: 6px; display: flex; padding: 3px; background: #fff; border: 1px solid rgba(0,0,0,.15); }
+.brand-colors i { width: 17px; height: 17px; display: block; }
+.brand-card > strong,.brand-card > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+.brand-card > strong { padding-top: 8px; font-size: 13px; }
+.brand-card > small { padding-top: 2px; padding-bottom: 8px; color: var(--muted); font-size: 9px; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(15,15,18,.68); backdrop-filter: blur(3px); }
+.brand-modal { width: min(660px,100%); max-height: calc(100vh - 40px); overflow: auto; background: #fff; border: 2px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
+.brand-modal > header { position: sticky; top: 0; z-index: 2; min-height: 74px; display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: #fff; border-bottom: 1px solid var(--line); }
+.brand-modal header span { color: var(--accent-dark); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+.brand-modal header h2 { margin: 3px 0 0; font-size: 20px; text-transform: none; letter-spacing: 0; }
+.brand-modal header button { width: 40px; height: 40px; border: 1px solid var(--line); background: #fff; }
+.brand-modal header svg { width: 18px; }
+.brand-modal form { display: grid; gap: 16px; padding: 18px; }
+.modal-field { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.brand-modal fieldset { margin: 0; padding: 12px; border: 1px solid var(--line); }
+.brand-modal legend { padding: 0 5px; font-size: 12px; font-weight: 700; }
+.brand-color-editors { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
+.brand-color-editors label { min-width: 0; display: grid; gap: 4px; color: var(--muted); font-size: 9px; text-align: center; }
+.brand-color-editors input { width: 100%; height: 40px; padding: 2px; }
+.asset-upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.asset-upload-grid label { min-height: 92px; padding: 14px; display: grid; align-content: center; gap: 3px; border: 1px dashed var(--line); background: var(--wash); cursor: pointer; }
+.asset-upload-grid span { color: var(--muted); font-size: 10px; }
+.asset-upload-grid input { min-height: 30px; padding: 4px 0; border: 0; background: transparent; font-size: 10px; }
+.asset-preview { display: grid; grid-template-columns: repeat(6,1fr); gap: 6px; }
+.asset-preview img { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid var(--line); }
+.brand-modal form > footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media(max-width:600px){.brand-color-editors{grid-template-columns:repeat(3,1fr)}.asset-upload-grid{grid-template-columns:1fr}.asset-preview{grid-template-columns:repeat(4,1fr)}}
