@@ -147,8 +147,9 @@ export default function Editor() {
       const target = event.target;
       requestAnimationFrame(() => refreshCroppedImage(target));
     });
-    c.on('after:render', () => {
-      const context = c.getTopContext(); const { x, y } = snapGuides.current;
+    c.on('after:render', ({ ctx }) => {
+      const context = ctx; const { x, y } = snapGuides.current;
+      if (!context) return;
       context.save(); context.strokeStyle = '#ff4d6d'; context.lineWidth = 2; context.setLineDash([10, 8]);
       if (x !== undefined) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, c.height); context.stroke(); }
       if (y !== undefined) { context.beginPath(); context.moveTo(0, y); context.lineTo(c.width, y); context.stroke(); }
