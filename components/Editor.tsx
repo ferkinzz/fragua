@@ -19,6 +19,8 @@ export default function Editor() {
   const [name, setName] = useState('Mi diseño');
   const [projectId, setProjectId] = useState('');
   const [size, setSize] = useState({ w: 1080, h: 1080 });
+  const [customWidth, setCustomWidth] = useState('1080');
+  const [customHeight, setCustomHeight] = useState('1080');
   const [zoom, setZoom] = useState(56);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [layers, setLayers] = useState<fabric.FabricObject[]>([]);
@@ -75,7 +77,17 @@ export default function Editor() {
   async function duplicate() { const c = canvas.current; const active = c?.getActiveObject(); if (!c || !active) return; const clone = await active.clone(); clone.set({ left: (active.left ?? 0) + 28, top: (active.top ?? 0) + 28 }); c.add(clone); c.setActiveObject(clone); c.requestRenderAll(); }
   async function travel(delta: number) { const c = canvas.current; const next = historyIndex.current + delta; if (!c || next < 0 || next >= history.current.length) return; restoring.current = true; historyIndex.current = next; await c.loadFromJSON(history.current[next]); c.requestRenderAll(); restoring.current = false; setCanUndo(next > 0); setCanRedo(next < history.current.length - 1); syncUi(); }
   function patchObject(values: Record<string, unknown>) { const c = canvas.current; const o = c?.getActiveObject(); if (!c || !o) return; o.set(values); o.setCoords(); c.requestRenderAll(); snapshot(); syncUi(); }
-  function resize(w: number, h: number) { const c = canvas.current; if (!c) return; c.setDimensions({ width: w, height: h }); setSize({ w, h }); c.requestRenderAll(); snapshot(); }
+  function resize(w: number, h: number) { const c = canvas.current; if (!c) return; c.setDimensions({ width: w, height: h }); setSize({ w, h }); setCustomWidth(String(w)); setCustomHeight(String(h)); c.requestRenderAll(); snapshot(); }
+  function applyCustomSize() {
+    const w = Math.round(Number(customWidth));
+    const h = Math.round(Number(customHeight));
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 64 || h < 64 || w > 10000 || h > 10000) {
+      setStatus('Usa medidas entre 64 y 10,000 px');
+      return;
+    }
+    resize(w, h);
+    setStatus(`Lienzo personalizado: ${w} × ${h}px`);
+  }
   function layer(action: 'front' | 'back') { const c = canvas.current; const o = c?.getActiveObject(); if (!c || !o) return; action === 'front' ? c.bringObjectToFront(o) : c.sendObjectToBack(o); c.requestRenderAll(); snapshot(); }
   function center() { const c = canvas.current; const o = c?.getActiveObject(); if (!c || !o) return; c.centerObject(o); o.setCoords(); c.requestRenderAll(); snapshot(); }
   async function saveProject() { const c = canvas.current; if (!c) return; setStatus('Guardando…'); const response = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: projectId, name, width: size.w, height: size.h, background: c.backgroundColor, canvas: c.toJSON() }) }); const result = await response.json(); setProjectId(result.id); setStatus(`Guardado en data/projects/${result.id}.json`); await refreshProjects(); }
@@ -93,7 +105,7 @@ export default function Editor() {
     <div className="workspace">
       <aside className="sidebar left-panel">
         <section><h2>Agregar</h2><div className="tool-grid"><button onClick={addText}><Type/><span>Texto</span></button><button onClick={addRect}><Square/><span>Rectángulo</span></button><button onClick={addCircle}><Circle/><span>Círculo</span></button><label className="tool"><ImagePlus/><span>Imagen</span><input type="file" accept="image/*" hidden onChange={(e) => void uploadImage(e.target.files?.[0])}/></label></div></section>
-        <section><h2>Lienzo</h2><label className="field">Formato<select value={`${size.w}x${size.h}`} onChange={(e) => { const [w,h] = e.target.value.split('x').map(Number); resize(w,h); }}>{SIZES.map((s) => <option key={s.name} value={`${s.w}x${s.h}`}>{s.name} · {s.w}×{s.h}</option>)}</select></label><label className="field">Fondo<input type="color" value={String(canvas.current?.backgroundColor || '#ffffff')} onChange={(e) => { if (canvas.current) { canvas.current.backgroundColor = e.target.value; canvas.current.requestRenderAll(); snapshot(); } }}/></label></section>
+        <section><h2>Lienzo</h2><label className="field">Formato<select value={SIZES.some((s) => s.w === size.w && s.h === size.h) ? `${size.w}x${size.h}` : 'custom'} onChange={(e) => { if (e.target.value === 'custom') return; const [w,h] = e.target.value.split('x').map(Number); resize(w,h); }}>{SIZES.map((s) => <option key={s.name} value={`${s.w}x${s.h}`}>{s.name} · {s.w}×{s.h}</option>)}<option value="custom">Personalizado · {size.w}×{size.h}</option></select></label><div className="custom-size"><label>Ancho<input type="number" min="64" max="10000" inputMode="numeric" value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label><span>×</span><label>Alto<input type="number" min="64" max="10000" inputMode="numeric" value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label></div><button className="apply-size" onClick={applyCustomSize}>Aplicar tamaño libre</button><p className="size-help">De 64 a 10,000 px por lado.</p><label className="field">Fondo<input type="color" value={String(canvas.current?.backgroundColor || '#ffffff')} onChange={(e) => { if (canvas.current) { canvas.current.backgroundColor = e.target.value; canvas.current.requestRenderAll(); snapshot(); } }}/></label></section>
         <section><h2>Banco de imágenes</h2><form className="media-search" onSubmit={(e) => void searchMedia(e)}><input aria-label="Buscar en Pexels" value={mediaQuery} onChange={(e) => setMediaQuery(e.target.value)} placeholder="Buscar fotos…"/><button disabled={mediaLoading}>{mediaLoading ? '…' : 'Buscar'}</button></form><div className="media-grid">{media.map((item) => <button key={item.id} onClick={() => void addStockImage(item)} title={`${item.alt} · ${item.photographer}`}><img src={item.thumb} alt={item.alt || `Foto de ${item.photographer}`}/><span>{item.photographer}</span></button>)}</div></section>
         <section><h2>Abrir proyecto</h2><select aria-label="Abrir proyecto" value="" onChange={(e) => void loadProject(e.target.value)}><option value="">Seleccionar…</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="hint"><FolderOpen/> {projects.length} guardado{projects.length === 1 ? '' : 's'} localmente</p></section>
       </aside>
