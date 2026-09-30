@@ -119,6 +119,6 @@
 .accordion-section.accordion-open > h2::after { transform: rotate(0); }
 .accordion-section > h2:focus-visible { outline: 3px solid color-mix(in srgb,var(--focus) 42%,transparent); outline-offset: -3px; }
 .accordion-section:not(.accordion-open) > :not(h2) { display: none; }
-.accordion-section.accordion-open > :not(h2) { margin-left: 18px; margin-right: 18px; }
+.accordion-section.accordion-open > :not(h2) { width: calc(100% - 36px); max-width: calc(100% - 36px); margin-left: 18px; margin-right: 18px; }
 .accordion-section.accordion-open > :last-child { margin-bottom: 18px; }
 .accordion-section.accordion-open > h2 + * { margin-top: 0; }
