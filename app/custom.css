@@ -126,6 +126,7 @@
 .brand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .brand-card { min-width: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); background: #fff; text-align: left; }
 .brand-card:hover { border-color: var(--ink); transform: translateY(-1px); }
+.brand-card.active { border-color: var(--accent-dark); box-shadow: 0 0 0 2px #ffd8e0; }
 .brand-visual { position: relative; aspect-ratio: 4/3; overflow: hidden; background: var(--wash); }
 .brand-visual > img,.brand-visual > span { width: 100%; height: 100%; display: block; object-fit: cover; }
 .brand-colors { position: absolute; left: 6px; bottom: 6px; display: flex; padding: 3px; background: #fff; border: 1px solid rgba(0,0,0,.15); }
@@ -133,6 +134,13 @@
 .brand-card > strong,.brand-card > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
 .brand-card > strong { padding-top: 8px; font-size: 13px; }
 .brand-card > small { padding-top: 2px; padding-bottom: 8px; color: var(--muted); font-size: 9px; }
+.brand-assets { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.brand-assets h3 { margin: 0 0 9px; font-size: 12px; }
+.brand-assets > small { display: block; margin: 9px 0 5px; color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.brand-assets > div { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+.brand-assets button { min-width: 0; aspect-ratio: 1; padding: 5px; border: 1px solid var(--line); background: var(--wash); }
+.brand-assets button:hover { border-color: var(--ink); background: #fff; }
+.brand-assets img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(15,15,18,.68); backdrop-filter: blur(3px); }
 .brand-modal { width: min(660px,100%); max-height: calc(100vh - 40px); overflow: auto; background: #fff; border: 2px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
 .brand-modal > header { position: sticky; top: 0; z-index: 2; min-height: 74px; display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: #fff; border-bottom: 1px solid var(--line); }
