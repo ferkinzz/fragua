@@ -32,3 +32,29 @@
 
 .apply-size:hover { background: var(--accent-dark); }
 .size-help { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+
+.stage-toolbar button.is-active {
+  color: var(--accent-dark);
+  background: #fff1f4;
+}
+
+.wide-action {
+  width: 100%;
+  min-height: 40px;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.wide-action:hover { border-color: var(--ink); background: var(--wash); }
+.wide-action svg { width: 17px; }
+.section-help { margin: -7px 0 10px; color: var(--muted); font-size: 11px; }
+.align-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.align-grid button { min-height: 40px; border: 1px solid var(--line); background: #fff; }
+.align-grid button:hover { border-color: var(--ink); background: var(--wash); }
+.align-grid svg { width: 18px; }
