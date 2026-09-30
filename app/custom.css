@@ -166,3 +166,7 @@
 .button.danger { color: #b42318; border-color: #f1b4ae; background: #fff5f4; }
 .button.danger:hover { background: #fee4e2; }
 @media(max-width:600px){.brand-color-editors{grid-template-columns:repeat(3,1fr)}.asset-upload-grid{grid-template-columns:1fr}.asset-preview{grid-template-columns:repeat(4,1fr)}}
+
+.stage { display: block; cursor: grab; overscroll-behavior: contain; }
+.stage.is-panning { cursor: grabbing; user-select: none; }
+.stage .canvas-frame { margin: 0 auto; }

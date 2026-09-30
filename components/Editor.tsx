@@ -24,6 +24,7 @@ const TEXT_STYLE_KEYS = new Set(['fill', 'fontFamily', 'fontSize', 'fontWeight',
 
 export default function Editor() {
   const canvasNode = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const canvas = useRef<fabric.Canvas | null>(null);
   const history = useRef<string[]>([]);
   const historyIndex = useRef(-1);
@@ -32,6 +33,7 @@ export default function Editor() {
   const snappingRef = useRef(true);
   const pagesRef = useRef<PageData[]>([]);
   const savedNameRef = useRef('');
+  const panRef = useRef({ active: false, x: 0, y: 0 });
   const [name, setName] = useState('Mi diseño');
   const [projectId, setProjectId] = useState('');
   const [size, setSize] = useState({ w: 1080, h: 1080 });
@@ -58,6 +60,7 @@ export default function Editor() {
   const [brands, setBrands] = useState<BrandKit[]>([]);
   const [palette, setPalette] = useState(COLORS);
   const [lastSaved, setLastSaved] = useState('Sin guardar');
+  const [isPanning, setIsPanning] = useState(false);
   const [brandModalOpen, setBrandModalOpen] = useState(false);
   const [editingBrandId, setEditingBrandId] = useState('');
   const [activeBrandId, setActiveBrandId] = useState('');
@@ -102,13 +105,25 @@ export default function Editor() {
     object.canvas?.requestRenderAll();
   }, []);
 
+  function pointerPosition(event: MouseEvent | TouchEvent | PointerEvent) { if ('touches' in event && event.touches.length) return { x: event.touches[0].clientX, y: event.touches[0].clientY }; return { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY }; }
+  function startPan(clientX: number, clientY: number) { panRef.current = { active: true, x: clientX, y: clientY }; setIsPanning(true); if (canvas.current) { canvas.current.selection = false; canvas.current.defaultCursor = 'grabbing'; } }
+  function stopPan() { if (!panRef.current.active) return; panRef.current.active = false; setIsPanning(false); if (canvas.current) { canvas.current.selection = true; canvas.current.defaultCursor = 'default'; canvas.current.requestRenderAll(); } }
+
   useEffect(() => {
     if (!canvasNode.current) return;
-    const c = new fabric.Canvas(canvasNode.current, { width: size.w, height: size.h, backgroundColor: '#ffffff', preserveObjectStacking: true, selectionColor: 'rgba(255,77,109,.12)', selectionBorderColor: '#ff4d6d' });
+    const c = new fabric.Canvas(canvasNode.current, { width: size.w, height: size.h, backgroundColor: '#ffffff', preserveObjectStacking: true, selectionColor: 'rgba(255,77,109,.12)', selectionBorderColor: '#ff4d6d', defaultCursor: 'default' });
     canvas.current = c;
     c.on('object:added', snapshot); c.on('object:modified', snapshot); c.on('object:removed', snapshot);
     c.on('selection:created', syncUi); c.on('selection:updated', syncUi); c.on('selection:cleared', syncUi);
     c.on('object:added', () => attachCrop(c));
+    c.on('mouse:down', (event) => {
+      const nativeEvent = event.e as MouseEvent | PointerEvent;
+      if (!event.target && nativeEvent.ctrlKey && nativeEvent.altKey) {
+        nativeEvent.preventDefault();
+        const point = pointerPosition(nativeEvent);
+        startPan(point.x, point.y);
+      }
+    });
     c.on('object:moving', (event) => {
       if (!snappingRef.current || !event.target) return;
       const object = event.target;
@@ -146,6 +161,8 @@ export default function Editor() {
     return () => { c.dispose(); canvas.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { const move = (event: PointerEvent) => { const stage = stageRef.current; if (!stage || !panRef.current.active) return; event.preventDefault(); const dx = event.clientX - panRef.current.x; const dy = event.clientY - panRef.current.y; stage.scrollLeft -= dx; stage.scrollTop -= dy; panRef.current.x = event.clientX; panRef.current.y = event.clientY; }; window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', stopPan); window.addEventListener('pointercancel', stopPan); return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stopPan); window.removeEventListener('pointercancel', stopPan); }; }, []);
 
   async function refreshProjects() { try { setProjects(await (await fetch('/api/projects')).json()); } catch { setStatus('No pude leer los proyectos'); } }
   async function refreshLibraries() { try { const [templateList, brandList] = await Promise.all([fetch('/api/library/templates').then((r) => r.json()), fetch('/api/library/brands').then((r) => r.json())]); setTemplates(templateList); setBrands(brandList); } catch { setStatus('No pude leer plantillas o marcas'); } }
@@ -276,7 +293,7 @@ export default function Editor() {
       </aside>
       <section className="stage-column">
         <div className="stage-toolbar"><div><button aria-label="Deshacer" disabled={!canUndo} onClick={() => void travel(-1)}><Undo2/></button><button aria-label="Rehacer" disabled={!canRedo} onClick={() => void travel(1)}><Redo2/></button><span className="divider"/><button aria-label="Duplicar" disabled={!selected} onClick={() => void duplicate()}><Copy/></button><button aria-label="Eliminar" disabled={!selected} onClick={remove}><Trash2/></button><span className="divider"/><button className={snapping ? 'is-active' : ''} aria-label={snapping ? 'Desactivar ajuste magnético' : 'Activar ajuste magnético'} aria-pressed={snapping} onClick={toggleSnapping}><Magnet/></button></div><label className="zoom">{zoom}%<input type="range" min="20" max="90" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/></label></div>
-        <div className="stage"><div className="canvas-frame" style={{ width: size.w * zoom / 100, height: size.h * zoom / 100 }}><div style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }}><canvas ref={canvasNode}/></div></div></div>
+        <div ref={stageRef} className={`stage ${isPanning ? 'is-panning' : ''}`} onPointerDown={(event) => { if (event.target === event.currentTarget) startPan(event.clientX, event.clientY); }}><div className="canvas-frame" style={{ width: size.w * zoom / 100, height: size.h * zoom / 100 }}><div style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }}><canvas ref={canvasNode}/></div></div></div>
         <div className="page-strip"><button className="add-page" onClick={() => addPage(false)}><FilePlus2/> Nueva</button>{pages.map((page, index) => <div key={page.id} className={`page-chip ${page.id === activePageId ? 'active' : ''}`}><button onClick={() => void openPage(page.id)} onDoubleClick={() => renamePage(page.id)} title="Doble clic para renombrar">{page.thumb ? <img src={page.thumb} alt=""/> : <span>{index + 1}</span>}<small>{page.name}</small></button><div><button disabled={index === 0} onClick={() => movePage(page.id, -1)}>←</button><button onClick={() => { if (page.id === activePageId) addPage(true); }}>＋</button><button disabled={pages.length === 1} onClick={() => void deletePage(page.id)}>×</button><button disabled={index === pages.length - 1} onClick={() => movePage(page.id, 1)}>→</button></div></div>)}</div>
         <footer className="status"><span className="status-dot"/>{status}<span>{size.w} × {size.h}px</span></footer>
       </section>
