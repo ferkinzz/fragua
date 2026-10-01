@@ -306,6 +306,9 @@ export default function Editor() {
     });
     snapshot();
     const firstPage: PageData = { id: `page-${Date.now()}`, name: 'Página 1', w: size.w, h: size.h, bg: '#ffffff', json: c.toJSON() };
+    // Fabric puede no pintar el color de fondo al crear un lienzo vacío hasta que llega una interacción.
+    c.backgroundColor = firstPage.bg;
+    c.renderAll();
     pagesRef.current = [firstPage]; setPages([firstPage]); setActivePageId(firstPage.id);
     void requestPersistentStorage().catch(() => false);
     void refreshProjects(); void refreshLibraries();
