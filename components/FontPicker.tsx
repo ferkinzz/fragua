@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Props = { value: string; onChange: (font: string) => void; loadFont: (font: string) => Promise<boolean> };
 export const LOCAL_FONTS = ['Arial', 'Georgia', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman'];
-export const GOOGLE_FONTS = ['Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Lato', 'Poppins', 'Nunito', 'Raleway', 'Oswald', 'Playfair Display', 'Merriweather', 'Lora', 'DM Sans', 'Manrope', 'Rubik', 'Work Sans', 'Source Sans 3', 'Ubuntu', 'Libre Baskerville', 'Cormorant Garamond', 'Bebas Neue', 'Archivo Black', 'Barlow', 'Outfit', 'Space Grotesk', 'Plus Jakarta Sans', 'Figtree', 'DM Serif Display', 'Josefin Sans', 'Quicksand', 'Karla', 'Cabin', 'Anton', 'Abril Fatface', 'EB Garamond'];
+export const GOOGLE_FONTS = ['Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Lato', 'Poppins', 'Nunito', 'Raleway', 'Oswald', 'Playfair Display', 'Merriweather', 'Lora', 'DM Sans', 'Manrope', 'Rubik', 'Work Sans', 'Source Sans 3', 'Ubuntu', 'Libre Baskerville', 'Cormorant Garamond', 'Bebas Neue', 'Archivo Black', 'Barlow', 'Outfit', 'Space Grotesk', 'Plus Jakarta Sans', 'Figtree', 'DM Serif Display', 'Josefin Sans', 'Quicksand', 'Karla', 'Cabin', 'Anton', 'Abril Fatface', 'EB Garamond', 'Great Vibes'];
 const ALL_FONTS = [...LOCAL_FONTS, ...GOOGLE_FONTS];
 
 export default function FontPicker({ value, onChange, loadFont }: Props) {
