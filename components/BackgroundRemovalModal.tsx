@@ -6,7 +6,7 @@ import { Eraser, X } from 'lucide-react';
 
 type Props = { source: HTMLCanvasElement; onClose: () => void; onInsert: (image: Blob) => Promise<void> };
 type ProgressInfo = { status?: string; progress?: number };
-type AlphaMask = { width: number; height: number; data: Uint8Array };
+type AlphaMask = { width: number; height: number; data: ArrayLike<number> };
 type ModelRunner = (image: HTMLCanvasElement) => Promise<AlphaMask>;
 
 let runnerPromise: Promise<ModelRunner> | null = null;
@@ -18,27 +18,37 @@ function getModelRunner(onProgress: (progress: ProgressInfo) => void): Promise<M
       // Pages rejects the 25.6 MiB threaded WASM; native import fetches the runtime
       // from jsDelivr only when the user opens this tool.
       const runtimeUrl = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/+esm';
-      const { AutoModel, AutoProcessor } = await import(/* webpackIgnore: true */ runtimeUrl);
+      const { pipeline } = await import(/* webpackIgnore: true */ runtimeUrl);
       const device = 'gpu' in navigator ? 'webgpu' : 'wasm';
       const loadRunner = async (selectedDevice: 'webgpu' | 'wasm'): Promise<ModelRunner> => {
         const modelId = 'onnx-community/BiRefNet_lite-ONNX';
         const dtype = selectedDevice === 'webgpu' ? 'fp16' : 'fp32';
-        const model = await AutoModel.from_pretrained(modelId, { device: selectedDevice, dtype, progress_callback: onProgress });
-        const processor = await AutoProcessor.from_pretrained(modelId, { progress_callback: onProgress });
+        const segmenter = await pipeline('image-segmentation', modelId, { device: selectedDevice, dtype, progress_callback: onProgress });
         return async (image: HTMLCanvasElement) => {
-          const { pixel_values } = await processor(image);
-          const { output_image } = await model({ input_image: pixel_values });
-          const alpha = output_image[0].sigmoid().mul(255).to('uint8');
-          const [height, width] = alpha.dims.slice(-2);
-          if (!width || !height) throw new Error('BiRefNet no devolvió una máscara válida.');
-          return { width, height, data: alpha.data };
+          const predictions = await segmenter(image, { mask_threshold: 0.35 });
+          const segments = Array.isArray(predictions) ? predictions : [predictions];
+          const subject = segments.find((segment: { mask?: AlphaMask }) => segment?.mask)?.mask;
+          if (!subject || !subject.width || !subject.height || !subject.data || subject.data.length !== subject.width * subject.height) throw new Error('BiRefNet no devolvió una máscara de sujeto válida.');
+          return subject;
         };
       };
-      try { return await loadRunner(device); }
+      let runner: ModelRunner;
+      try { runner = await loadRunner(device); }
       catch (error) {
         if (device !== 'webgpu') throw error;
         return loadRunner('wasm');
       }
+      if (device === 'wasm') return runner;
+      return async (image: HTMLCanvasElement) => {
+        try { return await runner(image); }
+        catch {
+          try {
+            const fallback = await loadRunner('wasm');
+            runnerPromise = Promise.resolve(fallback);
+            return fallback(image);
+          } catch (error) { runnerPromise = null; throw error; }
+        }
+      };
     })().catch((error) => { runnerPromise = null; throw error; });
   }
   return runnerPromise;
