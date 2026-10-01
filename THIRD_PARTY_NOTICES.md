@@ -8,6 +8,7 @@ Versiones y declaraciones de licencia según `package-lock.json` al preparar est
 
 | Paquete | Versión | Licencia declarada |
 | --- | --- | --- |
+| `@huggingface/transformers` | 4.3.0 | Apache-2.0 |
 | `@shapesoup/core` | 0.2.3 | MIT |
 | `fabric` | 7.4.0 | MIT |
 | `imagetracerjs` | 1.2.6 | Unlicense |
@@ -28,3 +29,7 @@ La tabla no es un inventario exhaustivo de dependencias transitivas, opcionales 
 Fragua puede consultar Pexels, Iconify y Google Fonts. Las fotos, iconos y tipografías que se elijan o incorporen conservan sus propios términos, atribuciones y restricciones; no quedan relicenciados bajo MPL-2.0 por usarse en Fragua. Quien publique un diseño debe verificar los derechos de cada recurso concreto.
 
 El script `scripts/create-sibila-rollup.mjs` incluye contenido de un proyecto específico y una ruta a un logotipo externo. No lleva aviso MPL y no se incluye en la concesión de licencia de Fragua mientras no se confirme la autorización para redistribuir ese material.
+
+## Modelo de eliminación de fondo
+
+La función «Quitar fondo» usa [Xenova/modnet](https://huggingface.co/Xenova/modnet), publicado bajo Apache-2.0, con [Transformers.js](https://github.com/huggingface/transformers). El modelo se descarga desde Hugging Face la primera vez que se usa y queda en la caché del navegador. La inferencia se ejecuta en el dispositivo; las imágenes seleccionadas no se envían al servicio que aloja el modelo.

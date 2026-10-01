@@ -374,4 +374,5 @@
 .trace-stats { min-height: 18px; margin: 9px 0 0; font-size: 11px; }
 .trace-modal-body > footer { margin-top: 12px; padding-top: 12px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); }
 .trace-modal-body > footer .button { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.bg-remove-progress { width: 100%; height: 8px; margin: 8px 0 0; accent-color: var(--accent); }
 @media(max-width:600px){.trace-modal-backdrop{padding:10px}.trace-modal{max-height:calc(100vh - 20px)}.trace-modal-body{padding:12px}.trace-options{grid-template-columns:1fr;gap:10px}.trace-previews{grid-template-columns:1fr}.trace-previews img,.trace-placeholder{height:200px}.trace-modal-body>footer{flex-wrap:wrap}.trace-modal-body>footer .button{flex:1;justify-content:center}}
