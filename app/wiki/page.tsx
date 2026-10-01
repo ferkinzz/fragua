@@ -43,5 +43,9 @@ export default function WikiPage() {
       </ul>
       <p>En macOS, usa <kbd>⌘</kbd> en lugar de <kbd>Ctrl</kbd> para los atajos compatibles.</p>
     </section>
+    <section>
+      <h2>Proyecto en GitHub</h2>
+      <p>Consulta el repositorio de Fragua en <a href="https://github.com/ferkinzz/fragua" target="_blank" rel="noreferrer">GitHub</a>.</p>
+    </section>
   </InfoPage>;
 }
