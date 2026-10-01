@@ -1,2 +1,0 @@
-import { NextResponse } from 'next/server';
-export async function GET(request: Request) { const query = new URL(request.url).searchParams.get('q')?.trim(); if (!query) return NextResponse.json({ icons: [] }); const response = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=48`, { cache: 'no-store' }); if (!response.ok) return NextResponse.json({ error: 'Iconify no respondió' }, { status: response.status }); const data = await response.json(); return NextResponse.json({ icons: data.icons || [] }); }

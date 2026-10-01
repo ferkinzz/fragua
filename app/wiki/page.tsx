@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Wiki',
   description: 'Aprende a crear, editar, guardar y exportar diseños con Fragua.',
-  alternates: { canonical: '/wiki' },
+  alternates: { canonical: '/wiki/' },
 };
 
 export default function WikiPage() {
@@ -30,7 +30,8 @@ export default function WikiPage() {
     </section>
     <section className="info-callout">
       <h2>Almacenamiento en esta versión</h2>
-      <p>Al ejecutarlo localmente, Guardar, kits, plantillas, recursos y copias exportadas se escriben en carpetas del equipo que ejecuta el servidor. Si despliegas una copia con backend en un servidor compartido, ese servidor recibe y conserva los archivos. No publiques una instancia así como “solo navegador” hasta migrar el almacenamiento a IndexedDB y quitar o sustituir las rutas de servidor.</p>
+      <p>Proyectos, plantillas, kits e imágenes se guardan en IndexedDB en el navegador. Cada perfil y cada origen (por ejemplo, localhost y el dominio publicado) tiene su propio almacenamiento. Usa <strong>Abrir proyecto → Descargar respaldo ZIP</strong> para guardar proyectos JSON junto con sus imágenes y bibliotecas; impórtalo en otro navegador para restaurarlos.</p>
+      <p>Este almacenamiento no se sincroniza y el navegador puede eliminarlo. Descarga respaldos periódicamente. La carpeta heredada <code>data/</code> se puede convertir con <code>npm run backup:legacy</code> e importar desde el editor.</p>
     </section>
     <section>
       <h2>Atajos</h2>

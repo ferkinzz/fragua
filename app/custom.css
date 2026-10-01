@@ -32,6 +32,19 @@
 
 .apply-size:hover { background: var(--accent-dark); }
 .size-help { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+.backup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.backup-actions .wide-action { min-height: 46px; margin: 4px 0; padding: 7px; font-size: 11px; }
+.backup-actions .wide-action.is-disabled { opacity: .45; pointer-events: none; }
+.local-storage-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.pexels-tools { display: grid; gap: 7px; margin-top: 8px; font-size: 11px; }
+.pexels-tools a { color: var(--accent-dark); font-weight: 700; }
+.pexels-key-button { justify-self: start; min-height: 30px; border: 1px solid var(--line); padding: 4px 8px; background: #fff; font-size: 11px; }
+.pexels-tools form { display: grid; gap: 6px; padding: 9px; border: 1px solid var(--line); background: var(--wash); }
+.pexels-tools label { display: grid; gap: 4px; font-weight: 700; }
+.pexels-tools input { min-height: 34px; font-weight: 400; }
+.pexels-tools small { color: var(--muted); line-height: 1.4; }
+.pexels-tools form>div { display: flex; gap: 5px; flex-wrap: wrap; }
+.pexels-tools form button { min-height: 30px; border: 1px solid var(--line); padding: 3px 7px; background: #fff; font-size: 10px; }
 
 .stage-toolbar button.is-active {
   color: var(--accent-dark);

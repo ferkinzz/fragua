@@ -2,7 +2,7 @@
 
 **Editor gráfico abierto, local y sin cuentas.**
 
-Editor gráfico de carteles y composiciones, construido con Fabric.js y Next.js. Está pensado para ejecutarse en tu propio equipo: el lienzo se edita en el navegador y el servidor local guarda los proyectos y recursos en carpetas del repositorio.
+Editor gráfico de carteles y composiciones, construido con Fabric.js y Next.js. Es local-first: proyectos, plantillas, kits de marca e imágenes se guardan en IndexedDB dentro del navegador. No requiere cuentas ni un servidor con base de datos; también puede compilarse como sitio estático.
 
 La interfaz incluye documentos de varias páginas, texto y formas editables, imágenes, recorte, capas, agrupación, alineación, snapping, kits de marca, plantillas, una biblioteca de fotos e iconos y generación de formas SVG con ShapeSoup. Permite exportar PNG, JPEG, SVG, PDF y ZIP.
 
@@ -20,44 +20,40 @@ La interfaz incluye documentos de varias páginas, texto y formas editables, im�
 
 ```bash
 npm install
-cp .env.example .env.local
-```
-
-Si quieres habilitar la búsqueda de fotos, agrega tu clave a `.env.local`:
-
-```dotenv
-PEXELS_API_KEY=tu_clave_de_pexels
-```
-
-Después inicia el servidor de desarrollo:
-
-```bash
 npm run dev
 ```
 
 Abre [http://localhost:3000](http://localhost:3000). Para detenerlo, usa `Ctrl+C` en la terminal donde está corriendo.
 
-Los otros comandos disponibles son `npm run lint`, `npx tsc --noEmit` y `npm run build`. Para el flujo normal de edición local no hace falta ejecutar el build.
+Para habilitar las fotos, abre **Biblioteca → Fotos → Configurar clave de Pexels** y pega tu propia clave. Se conserva en el almacenamiento de ese navegador, no se añade a proyectos ni respaldos y no se publica en el repositorio. Al buscar, el navegador envía la clave directamente a Pexels.
+
+Los otros comandos disponibles son `npm run lint`, `npx tsc --noEmit` y `npm run build`. El build está configurado como exportación estática: genera el sitio en `out/`, listo para Cloudflare Pages. Ese artefacto está excluido de Git.
 
 ## Guardados y archivos
 
-Los datos se escriben en `data/` en el equipo donde corre el servidor:
+Los datos de trabajo viven en IndexedDB para el origen que estés usando (por ejemplo, `localhost:3000` o `fragua.rtsi.site`). El navegador separa esos almacenes: para moverlos entre equipos, perfiles o dominios usa **Abrir proyecto → Descargar respaldo ZIP** e **Importar respaldo**. El paquete incluye los proyectos en JSON, assets, plantillas y kits de marca. Descárgalo periódicamente: borrar los datos del sitio o usar un perfil distinto puede hacer que el navegador ya no vea ese almacenamiento.
 
-| Carpeta | Contenido |
+Los diseños y recursos personales no se guardan en el repositorio ni se suben al sitio publicado. La carpeta `data/` conserva archivos de la versión anterior y se excluye de Git. Para migrarlos una sola vez al navegador:
+
+```bash
+npm run backup:legacy
+```
+
+El comando crea un ZIP de migración dentro de `data/exports/`; impórtalo en el editor con **Importar respaldo**. No borra ni modifica los archivos originales. Las exportaciones PNG/JPEG/PDF se descargan directamente al dispositivo.
+
+| Carpeta heredada | Contenido |
 | --- | --- |
 | `data/projects/` | Documentos editables en JSON y versiones anteriores de los proyectos. |
 | `data/assets/` | Imágenes importadas y recursos descargados para incorporarlos al lienzo. |
-| `data/exports/` | Exportaciones rasterizadas que el editor guarda localmente. |
+| `data/exports/` | Exportaciones y respaldos heredados de versiones anteriores; el editor actual descarga las exportaciones al dispositivo. |
 | `data/templates/` | Plantillas guardadas. |
 | `data/brands/` | Kits de marca. |
 
-El botón **Guardar** y `Ctrl+S` guardan el proyecto; los proyectos ya existentes también tienen guardado periódico. Cambiar el nombre de un proyecto guardado crea una copia nueva. Las carpetas de datos se excluyen de Git para evitar subir diseños, imágenes o exportaciones personales por accidente. Haz copias de seguridad de `data/` si quieres conservar tus trabajos; Git no es su respaldo.
-
-Aunque el lienzo se edita en el navegador, el guardado y la gestión de archivos dependen de rutas de servidor de Next.js. Por eso esta versión no es una aplicación puramente estática ni almacena todo solo en el navegador. Si despliegas una instancia con backend, ese servidor recibe y guarda los archivos.
+El botón **Guardar** y `Ctrl+S` escriben en el navegador; los proyectos guardados también tienen guardado periódico. Cambiar el nombre de un proyecto guardado crea una copia nueva. IndexedDB mejora la capacidad frente a `localStorage` y permite almacenar imágenes como archivos, pero sigue sujeto a las cuotas y políticas de cada navegador: el ZIP es el respaldo portable, no Git.
 
 ## Recursos de terceros
 
-- **Pexels:** búsqueda de fotografías; requiere `PEXELS_API_KEY`.
+- **Pexels:** búsqueda opcional de fotografías con una clave que cada persona configura en su navegador.
 - **Iconify:** búsqueda e inserción de iconos.
 - **Google Fonts:** carga de tipografías web cuando se solicita desde el editor.
 - **ShapeSoup:** generación de formas y patrones SVG.

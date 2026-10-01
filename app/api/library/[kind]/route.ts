@@ -1,8 +1,0 @@
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { NextResponse } from 'next/server';
-import { brandDir, ensureDataDirs, safeName, templateDir } from '@/lib/storage';
-export const runtime = 'nodejs';
-function directory(kind: string) { return kind === 'templates' ? templateDir : kind === 'brands' ? brandDir : null; }
-export async function GET(_request: Request, context: { params: Promise<{ kind: string }> }) { await ensureDataDirs(); const { kind } = await context.params; const dir = directory(kind); if (!dir) return NextResponse.json({ error: 'Colección inválida' }, { status: 404 }); const files = (await readdir(dir)).filter((file) => file.endsWith('.json')); const items = await Promise.all(files.map(async (file) => { try { const data = JSON.parse(await readFile(path.join(dir, file), 'utf8')); return { id: file.slice(0, -5), name: data.name, updatedAt: data.updatedAt, ...(kind === 'brands' ? { colors: data.colors || [], fontFamily: data.fontFamily || 'Arial', logos: data.logos || [], images: data.images || [] } : {}) }; } catch { return null; } })); return NextResponse.json(items.filter(Boolean)); }
-export async function POST(request: Request, context: { params: Promise<{ kind: string }> }) { await ensureDataDirs(); const { kind } = await context.params; const dir = directory(kind); if (!dir) return NextResponse.json({ error: 'Colección inválida' }, { status: 404 }); const body = await request.json(); const id = safeName(body.id || `${body.name}-${Date.now()}`); const payload = { ...body, id, updatedAt: new Date().toISOString() }; await writeFile(path.join(dir, `${id}.json`), JSON.stringify(payload, null, 2)); return NextResponse.json({ id }); }

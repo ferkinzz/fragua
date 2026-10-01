@@ -8,9 +8,11 @@ import ColorExtractorModal from './ColorExtractorModal';
 import ShapeSoupModal from './ShapeSoupModal';
 import { Waves } from 'lucide-react';
 import { GOOGLE_FONTS } from './FontPicker';
+import { createRecordId, deleteLibrary, getLibrary, getProject, hydrateCanvasJSON, hydrateLibraryAsset, listLibrary, listProjects, requestPersistentStorage, saveAsset, saveLibrary, saveProject as saveProjectRecord, stableAssetReference } from '@/lib/browser-db';
+import { backupFilename, makeBrowserBackup, restoreBrowserBackup } from '@/lib/browser-backup';
 
 type ProjectListItem = { id: string; name: string; updatedAt: string };
-type StockImage = { id: number; alt: string; photographer: string; thumb: string; full: string };
+type StockImage = { id: number; alt: string; photographer: string; photographerUrl?: string; pageUrl?: string; thumb: string; full: string };
 type PageData = { id: string; name: string; w: number; h: number; bg: string; json: object; thumb?: string };
 type LibraryItem = { id: string; name: string; updatedAt: string };
 type BrandKit = LibraryItem & { colors: string[]; fontFamily: string; logos: string[]; images: string[] };
@@ -32,7 +34,7 @@ function exportSafeJSON(value: object) {
     if (Array.isArray(node)) { node.forEach(visit); return; }
     const item = node as Record<string, unknown>;
     if (typeof item.type === 'string' && item.type.toLowerCase() === 'image' && typeof item.src === 'string') {
-      const src = item.src.replace(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/api\/assets\/[^?#]*)/i, '$1');
+      const src = stableAssetReference(item.src);
       item.src = src;
       if (/^https?:\/\//i.test(src)) item.crossOrigin = 'anonymous';
       else if (typeof item.crossOrigin === 'string') delete item.crossOrigin;
@@ -52,6 +54,7 @@ function isVectorShape(object: fabric.FabricObject) { return ['path', 'rect', 'c
 
 export default function Editor() {
   const canvasNode = useRef<HTMLCanvasElement>(null);
+  const backupFileRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvas = useRef<fabric.Canvas | null>(null);
   const history = useRef<string[]>([]);
@@ -84,6 +87,10 @@ export default function Editor() {
   const [media, setMedia] = useState<StockImage[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaMode, setMediaMode] = useState<'photos' | 'icons'>('photos');
+  const [pexelsKey, setPexelsKey] = useState('');
+  const [pexelsKeyDraft, setPexelsKeyDraft] = useState('');
+  const [editingPexelsKey, setEditingPexelsKey] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
   const [icons, setIcons] = useState<string[]>([]);
   const [pages, setPages] = useState<PageData[]>([]);
   const [activePageId, setActivePageId] = useState('');
@@ -168,6 +175,11 @@ export default function Editor() {
   function stopPan() { if (!panRef.current.active) return; panRef.current.active = false; setIsPanning(false); if (canvas.current) { canvas.current.selection = true; canvas.current.defaultCursor = 'default'; canvas.current.requestRenderAll(); } }
 
   useEffect(() => {
+    const key = window.localStorage.getItem('fragua.pexels-key') || '';
+    setPexelsKey(key); setPexelsKeyDraft(key);
+  }, []);
+
+  useEffect(() => {
     if (!canvasNode.current) return;
     const c = new fabric.Canvas(canvasNode.current, { width: size.w, height: size.h, backgroundColor: '#ffffff', preserveObjectStacking: true, selectionColor: 'rgba(255,77,109,.12)', selectionBorderColor: '#ff4d6d', defaultCursor: 'default' });
     canvas.current = c;
@@ -216,6 +228,7 @@ export default function Editor() {
     snapshot();
     const firstPage: PageData = { id: `page-${Date.now()}`, name: 'Página 1', w: size.w, h: size.h, bg: '#ffffff', json: c.toJSON() };
     pagesRef.current = [firstPage]; setPages([firstPage]); setActivePageId(firstPage.id);
+    void requestPersistentStorage().catch(() => false);
     void refreshProjects(); void refreshLibraries();
     return () => { c.dispose(); canvas.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,8 +248,15 @@ export default function Editor() {
     return () => stage.removeEventListener('wheel', handleWheel);
   }, []);
 
-  async function refreshProjects() { try { setProjects(await (await fetch('/api/projects')).json()); } catch { setStatus('No pude leer los proyectos'); } }
-  async function refreshLibraries() { try { const [templateList, brandList] = await Promise.all([fetch('/api/library/templates').then((r) => r.json()), fetch('/api/library/brands').then((r) => r.json())]); setTemplates(templateList); setBrands(brandList); brandList.forEach((kit: BrandKit) => { if (GOOGLE_FONTS.includes(kit.fontFamily)) void ensureGoogleFont(kit.fontFamily); }); } catch { setStatus('No pude leer plantillas o marcas'); } }
+  async function refreshProjects() { try { setProjects(await listProjects()); } catch { setStatus('No pude leer los proyectos de este navegador'); } }
+  async function refreshLibraries() {
+    try {
+      const [templateList, brandRecords] = await Promise.all([listLibrary('templates'), listLibrary('brands')]);
+      const brandList = await Promise.all(brandRecords.map(async (kit) => ({ ...kit, logos: await Promise.all((Array.isArray(kit.logos) ? kit.logos as string[] : []).map(hydrateLibraryAsset)), images: await Promise.all((Array.isArray(kit.images) ? kit.images as string[] : []).map(hydrateLibraryAsset)) } as BrandKit)));
+      setTemplates(templateList); setBrands(brandList);
+      brandList.forEach((kit) => { if (typeof kit.fontFamily === 'string' && GOOGLE_FONTS.includes(kit.fontFamily)) void ensureGoogleFont(kit.fontFamily); });
+    } catch { setStatus('No pude leer plantillas o marcas locales'); }
+  }
   function setPagesSynced(next: PageData[]) { pagesRef.current = next; setPages(next); }
   function capturePage(page?: PageData): PageData | null { const c = canvas.current; if (!c) return null; const base = page || pagesRef.current.find((item) => item.id === activePageId) || pagesRef.current[0] || { id: activePageId || `page-${Date.now()}`, name: 'Página 1', w: c.width, h: c.height, bg: '#ffffff', json: { objects: [] } }; return { ...base, w: c.width, h: c.height, bg: String(c.backgroundColor || '#ffffff'), json: c.toJSON() }; }
   function commitCurrentPage() { const current = capturePage(); if (!current) return pagesRef.current; const exists = pagesRef.current.some((item) => item.id === current.id); const next = exists ? pagesRef.current.map((item) => item.id === current.id ? current : item) : [...pagesRef.current, current]; setPagesSynced(next); if (!activePageId) setActivePageId(current.id); return next; }
@@ -269,13 +289,30 @@ export default function Editor() {
   }
   async function uploadImage(file?: File) {
     if (!file) return; setStatus('Importando imagen…');
-    const form = new FormData(); form.append('file', file);
-    try { const response = await fetch('/api/assets', { method: 'POST', body: form }); const result = await response.json(); if (!response.ok || !result.src) throw new Error(result.error || 'Respuesta inválida'); const image = await fabric.FabricImage.fromURL(result.src, { crossOrigin: 'anonymous' }); const max = Math.min(700 / (image.width || 1), 700 / (image.height || 1), 1); image.scale(max); add(image); if (canvas.current) attachCrop(canvas.current); setStatus(`Guardada en data/assets/${result.filename} · doble clic para recortar`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude importar esa imagen'); }
+    try { const asset = await saveAsset(file, file.name); const image = await fabric.FabricImage.fromURL(asset.url); const max = Math.min(700 / (image.width || 1), 700 / (image.height || 1), 1); image.scale(max); add(image); if (canvas.current) attachCrop(canvas.current); setStatus(`Imagen guardada en este navegador · doble clic para recortar`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude importar esa imagen'); }
   }
-  async function replaceImage(file?: File) { const c = canvas.current; const old = c?.getActiveObject(); if (!file || !c || !old || old.type !== 'image') return; const form = new FormData(); form.append('file', file); setStatus('Reemplazando imagen…'); try { const response = await fetch('/api/assets', { method: 'POST', body: form }); const result = await response.json(); if (!response.ok || !result.src) throw new Error(result.error || 'Respuesta inválida'); const image = await fabric.FabricImage.fromURL(result.src, { crossOrigin: 'anonymous' }); image.set({ left: old.left, top: old.top, originX: old.originX, originY: old.originY, angle: old.angle, opacity: old.opacity, shadow: old.shadow, clipPath: old.clipPath, scaleX: (old.getScaledWidth() / (image.width || 1)), scaleY: (old.getScaledHeight() / (image.height || 1)) }); c.remove(old); c.add(image); c.setActiveObject(image); attachCrop(c); c.requestRenderAll(); snapshot(); syncUi(); setStatus(`Imagen reemplazada · ${result.filename}`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude reemplazar la imagen'); } }
-  async function searchMedia(e?: React.FormEvent) { e?.preventDefault(); if (!mediaQuery.trim()) return; setMediaLoading(true); setStatus(mediaMode === 'photos' ? 'Buscando en Pexels…' : 'Buscando en Iconify…'); try { const endpoint = mediaMode === 'photos' ? `/api/media/pexels?q=${encodeURIComponent(mediaQuery)}` : `/api/media/icons?q=${encodeURIComponent(mediaQuery)}`; const response = await fetch(endpoint); const result = await response.json(); if (!response.ok || result.error) throw new Error(result.error || 'Búsqueda fallida'); if (mediaMode === 'photos') { setMedia(result.photos); setStatus(`${result.photos.length} imágenes encontradas`); } else { setIcons(result.icons); setStatus(`${result.icons.length} iconos encontrados`); } } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude buscar recursos'); } finally { setMediaLoading(false); } }
-  async function addStockImage(item: StockImage) { setStatus('Guardando imagen en assets…'); try { const response = await fetch('/api/media/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: item.full, name: item.alt || `pexels-${item.id}` }) }); const result = await response.json(); if (!response.ok || !result.src) throw new Error(result.error || 'Respuesta inválida'); const image = await fabric.FabricImage.fromURL(result.src, { crossOrigin: 'anonymous' }); const max = Math.min(800 / (image.width || 1), 800 / (image.height || 1), 1); image.scale(max); add(image); if (canvas.current) attachCrop(canvas.current); setStatus(`Crédito: ${item.photographer} · guardada como ${result.filename}`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude agregar esa imagen'); } }
-  async function addIcon(iconId: string) { const [prefix, iconName] = iconId.split(':'); if (!prefix || !iconName) return; try { const response = await fetch(`/api/media/icons/${prefix}/${iconName}?color=${encodeURIComponent(inspector.fill || '#18181b')}`); if (!response.ok) throw new Error('No pude descargar el ícono'); const { objects, options } = await fabric.loadSVGFromString(await response.text()); const valid = objects.filter((object): object is fabric.FabricObject => Boolean(object)); if (!valid.length) throw new Error('SVG vacío'); const icon = fabric.util.groupSVGElements(valid, options); const scale = 220 / Math.max(icon.width || 220, icon.height || 220); icon.set({ scaleX: scale, scaleY: scale, originX: 'center', originY: 'center' }); add(icon); setStatus(`Ícono ${iconId} insertado como vector editable`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude insertar el ícono'); } }
+  async function replaceImage(file?: File) { const c = canvas.current; const old = c?.getActiveObject(); if (!file || !c || !old || old.type !== 'image') return; setStatus('Reemplazando imagen…'); try { const asset = await saveAsset(file, file.name); const image = await fabric.FabricImage.fromURL(asset.url); image.set({ left: old.left, top: old.top, originX: old.originX, originY: old.originY, angle: old.angle, opacity: old.opacity, shadow: old.shadow, clipPath: old.clipPath, scaleX: (old.getScaledWidth() / (image.width || 1)), scaleY: (old.getScaledHeight() / (image.height || 1)) }); c.remove(old); c.add(image); c.setActiveObject(image); attachCrop(c); c.requestRenderAll(); snapshot(); syncUi(); setStatus('Imagen reemplazada y guardada en este navegador'); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude reemplazar la imagen'); } }
+  async function searchMedia(e?: React.FormEvent) {
+    e?.preventDefault(); if (!mediaQuery.trim()) return;
+    if (mediaMode === 'photos' && !pexelsKey) { setEditingPexelsKey(true); setStatus('Configura tu clave de Pexels para buscar fotografías'); return; }
+    setMediaLoading(true); setStatus(mediaMode === 'photos' ? 'Buscando en Pexels…' : 'Buscando en Iconify…');
+    try {
+      if (mediaMode === 'photos') {
+        const response = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(mediaQuery)}&per_page=18`, { headers: { Authorization: pexelsKey } });
+        const result = await response.json(); if (!response.ok) throw new Error(result.error || (response.status === 401 ? 'La clave de Pexels no es válida' : 'Pexels no respondió'));
+        const photos: StockImage[] = (result.photos || []).map((photo: { id: number; alt: string; photographer: string; photographer_url?: string; url?: string; src: Record<string, string> }) => ({ id: photo.id, alt: photo.alt || '', photographer: photo.photographer, photographerUrl: photo.photographer_url, pageUrl: photo.url, thumb: photo.src.medium, full: photo.src.large2x || photo.src.large }));
+        setMedia(photos); setStatus(`${photos.length} imágenes encontradas · fotos por Pexels`);
+      } else {
+        const response = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(mediaQuery)}&limit=48`);
+        const result = await response.json(); if (!response.ok) throw new Error('Iconify no respondió');
+        setIcons(result.icons || []); setStatus(`${(result.icons || []).length} iconos encontrados`);
+      }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude buscar recursos'); }
+    finally { setMediaLoading(false); }
+  }
+  function savePexelsKey() { const key = pexelsKeyDraft.trim(); if (key) window.localStorage.setItem('fragua.pexels-key', key); else window.localStorage.removeItem('fragua.pexels-key'); setPexelsKey(key); setPexelsKeyDraft(key); setEditingPexelsKey(false); setStatus(key ? 'Clave de Pexels guardada solo en este navegador' : 'Clave de Pexels eliminada'); }
+  async function addStockImage(item: StockImage) { setStatus('Descargando imagen en este navegador…'); try { const response = await fetch(item.full); if (!response.ok) throw new Error('Pexels no permitió descargar la imagen desde este navegador'); const blob = await response.blob(); const asset = await saveAsset(blob, item.alt || `pexels-${item.id}`); const image = await fabric.FabricImage.fromURL(asset.url); const max = Math.min(800 / (image.width || 1), 800 / (image.height || 1), 1); image.scale(max); add(image); if (canvas.current) attachCrop(canvas.current); setStatus(`Crédito: ${item.photographer} · guardada en este navegador`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude agregar esa imagen'); } }
+  async function addIcon(iconId: string) { const [prefix, iconName] = iconId.split(':'); if (!prefix || !iconName) return; try { const response = await fetch(`https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(iconName)}.svg?color=${encodeURIComponent(inspector.fill || '#18181b')}`); if (!response.ok) throw new Error('No pude descargar el ícono'); const { objects, options } = await fabric.loadSVGFromString(await response.text()); const valid = objects.filter((object): object is fabric.FabricObject => Boolean(object)); if (!valid.length) throw new Error('SVG vacío'); const icon = fabric.util.groupSVGElements(valid, options); const scale = 220 / Math.max(icon.width || 220, icon.height || 220); icon.set({ scaleX: scale, scaleY: scale, originX: 'center', originY: 'center' }); add(icon); setStatus(`Ícono ${iconId} insertado como vector editable`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude insertar el ícono'); } }
   function remove() { const c = canvas.current; if (!c) return; c.getActiveObjects().forEach((o) => c.remove(o)); c.discardActiveObject(); c.requestRenderAll(); syncUi(); }
   async function duplicate() { const c = canvas.current; const active = c?.getActiveObject(); if (!c || !active) return; const clone = await active.clone(); clone.set({ left: (active.left ?? 0) + 28, top: (active.top ?? 0) + 28 }); c.add(clone); c.setActiveObject(clone); c.requestRenderAll(); }
   async function travel(delta: number) { const c = canvas.current; const next = historyIndex.current + delta; if (!c || next < 0 || next >= history.current.length) return; restoring.current = true; historyIndex.current = next; await c.loadFromJSON(history.current[next]); await prepareCanvasFonts(c); attachCrop(c); c.requestRenderAll(); restoring.current = false; setCanUndo(next > 0); setCanRedo(next < history.current.length - 1); syncUi(); }
@@ -307,18 +344,69 @@ export default function Editor() {
   function cropSelected() { const o = canvas.current?.getActiveObject(); if (!o || o.type !== 'image') { setStatus('Selecciona una imagen para recortarla'); return; } o.off('mousedblclick', enterCropMode); enterCropMode.call(enterCropMode, { target: o } as fabric.TPointerEventInfo); refreshCroppedImage(o); setStatus('Modo recorte activo · doble clic para terminar'); }
   function toggleSnapping() { const next = !snappingRef.current; snappingRef.current = next; setSnapping(next); snapGuides.current = {}; canvas.current?.requestRenderAll(); setStatus(next ? 'Ajuste magnético activado' : 'Ajuste magnético desactivado'); }
   function addColorToPalette(color: string) { setPalette((current) => [color, ...current.filter((item) => item.toLowerCase() !== color.toLowerCase())].slice(0, 7)); setStatus(`${color} añadido a la paleta rápida`); }
-  async function saveProject(silent = false) { const c = canvas.current; if (!c) return; const cleanName = name.trim() || 'Sin título'; if (!silent) setStatus('Guardando…'); try { const updatedPages = commitCurrentPage(); const effectivePageId = updatedPages.some((page) => page.id === activePageId) ? activePageId : updatedPages[0]?.id; const isRenamedCopy = Boolean(projectId && savedNameRef.current && savedNameRef.current !== cleanName); const payload = { id: isRenamedCopy ? '' : projectId, name: cleanName, width: c.width, height: c.height, background: c.backgroundColor, canvas: exportSafeJSON(c.toJSON()), pages: updatedPages.map((page) => ({ ...page, json: exportSafeJSON(page.json) })), activePageId: effectivePageId }; const response = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); const result = await response.json(); if (!response.ok || !result.id) throw new Error(result.error || 'El servidor no confirmó el guardado'); setProjectId(result.id); savedNameRef.current = cleanName; const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); setLastSaved(time); if (!silent) setStatus(`${isRenamedCopy ? 'Copia creada' : 'Guardado verificado'} · ${result.id}.json`); await refreshProjects(); } catch (error) { setStatus(error instanceof Error ? `No se guardó: ${error.message}` : 'No se pudo guardar'); } }
-  async function loadProject(id: string) { if (!id || !canvas.current) return; setStatus('Abriendo…'); const data = await (await fetch(`/api/projects/${id}`)).json(); const sourcePages: PageData[] = data.pages?.length ? data.pages : [{ id: `page-${Date.now()}`, name: 'Página 1', w: data.width, h: data.height, bg: data.background, json: data.canvas }]; const incoming = sourcePages.map((page) => ({ ...page, json: exportSafeJSON(page.json) })); setPagesSynced(incoming); const first = incoming.find((item) => item.id === data.activePageId) || incoming[0]; setActivePageId(first.id); restoring.current = true; canvas.current.setDimensions({ width: first.w, height: first.h }); setSize({ w: first.w, h: first.h }); setCustomWidth(String(first.w)); setCustomHeight(String(first.h)); await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); attachCrop(canvas.current); canvas.current.backgroundColor = first.bg; canvas.current.requestRenderAll(); restoring.current = false; setProjectId(data.id); setName(data.name); savedNameRef.current = data.name; history.current = []; historyIndex.current = -1; snapshot(); syncUi(); setStatus(`Proyecto abierto · ${incoming.length} página${incoming.length === 1 ? '' : 's'}`); }
+  async function saveProject(silent = false): Promise<boolean> {
+    const c = canvas.current; if (!c) return false;
+    const cleanName = name.trim() || 'Sin título'; if (!silent) setStatus('Guardando en este navegador…');
+    try {
+      const updatedPages = commitCurrentPage();
+      const effectivePageId = updatedPages.some((page) => page.id === activePageId) ? activePageId : updatedPages[0]?.id;
+      const isRenamedCopy = Boolean(projectId && savedNameRef.current && savedNameRef.current !== cleanName);
+      const id = isRenamedCopy || !projectId ? createRecordId(cleanName) : projectId;
+      await saveProjectRecord({ id, name: cleanName, width: c.width, height: c.height, background: String(c.backgroundColor || '#ffffff'), canvas: exportSafeJSON(c.toJSON()), pages: updatedPages.map((page) => ({ ...page, json: exportSafeJSON(page.json) })), activePageId: effectivePageId });
+      setProjectId(id); savedNameRef.current = cleanName;
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); setLastSaved(time);
+      if (!silent) setStatus(`${isRenamedCopy ? 'Copia creada' : 'Guardado en este navegador'} · ${id}`);
+      await refreshProjects();
+      return true;
+    } catch (error) { setStatus(error instanceof Error ? `No se guardó: ${error.message}` : 'No se pudo guardar'); return false; }
+  }
+  async function loadProject(id: string) {
+    if (!id || !canvas.current) return;
+    setStatus('Abriendo…');
+    try {
+      const data = await getProject(id); if (!data) throw new Error('No encontré ese proyecto en este navegador.');
+      const sourcePages: PageData[] = data.pages?.length ? data.pages : [{ id: `page-${Date.now()}`, name: 'Página 1', w: data.width, h: data.height, bg: data.background, json: data.canvas }];
+      const incoming = await Promise.all(sourcePages.map(async (page) => ({ ...page, json: await hydrateCanvasJSON(page.json) })));
+      setPagesSynced(incoming); const first = incoming.find((item) => item.id === data.activePageId) || incoming[0];
+      setActivePageId(first.id); restoring.current = true; canvas.current.setDimensions({ width: first.w, height: first.h }); setSize({ w: first.w, h: first.h }); setCustomWidth(String(first.w)); setCustomHeight(String(first.h));
+      await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); attachCrop(canvas.current); canvas.current.backgroundColor = first.bg; canvas.current.requestRenderAll(); restoring.current = false;
+      setProjectId(data.id); setName(data.name); savedNameRef.current = data.name; history.current = []; historyIndex.current = -1; snapshot(); syncUi();
+      setLastSaved(new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })); setStatus(`Proyecto abierto · ${incoming.length} página${incoming.length === 1 ? '' : 's'}`);
+    } catch (error) { restoring.current = false; setStatus(error instanceof Error ? error.message : 'No pude abrir el proyecto'); }
+  }
   async function duplicateAndResize() { const c = canvas.current; if (!c) return; const w = Math.round(Number(customWidth)); const h = Math.round(Number(customHeight)); if (w < 64 || h < 64 || w > 10000 || h > 10000) return setStatus('Define primero medidas válidas'); commitCurrentPage(); const temp = new fabric.StaticCanvas(undefined, { width: w, height: h, backgroundColor: c.backgroundColor }); await temp.loadFromJSON(c.toJSON()); const sx = w / c.width; const sy = h / c.height; temp.getObjects().forEach((o) => o.set({ left: (o.left ?? 0) * sx, top: (o.top ?? 0) * sy, scaleX: (o.scaleX ?? 1) * sx, scaleY: (o.scaleY ?? 1) * sy })); const page: PageData = { id: `page-${Date.now()}`, name: `Página ${pagesRef.current.length + 1} · ${w}×${h}`, w, h, bg: String(c.backgroundColor || '#fff'), json: temp.toJSON() }; temp.dispose(); setPagesSynced([...pagesRef.current, page]); await openPage(page.id); setStatus(`Copia creada en ${w} × ${h}px`); }
-  async function saveTemplate() { const title = window.prompt('Nombre de la plantilla', `${name} base`); if (!title) return; const body = { name: title, pages: commitCurrentPage() }; await fetch('/api/library/templates', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); await refreshLibraries(); setStatus(`Plantilla “${title}” guardada`); }
-  async function useTemplate(id: string) { const data = await (await fetch(`/api/library/templates/${id}`)).json(); if (!data.pages?.length) return; const cloned = data.pages.map((page: PageData, index: number) => ({ ...page, id: `page-${Date.now()}-${index}` })); setPagesSynced(cloned); setActivePageId(''); await openPage(cloned[0].id); setProjectId(''); setName(`${data.name} copia`); setStatus('Plantilla aplicada como documento nuevo'); }
-  async function uploadBrandAssets(files: FileList | null, kind: 'logos' | 'images') { if (!files?.length) return; setBrandSaving(true); try { const uploaded: string[] = []; for (const file of [...files]) { const form = new FormData(); form.append('file', file); const response = await fetch('/api/assets', { method: 'POST', body: form }); const result = await response.json(); if (!response.ok || !result.src) throw new Error(result.error || `No se pudo subir ${file.name}`); uploaded.push(result.src); } setBrandDraft((current) => ({ ...current, [kind]: [...current[kind], ...uploaded] })); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude subir los recursos de marca'); } finally { setBrandSaving(false); } }
+  async function saveTemplate() { const title = window.prompt('Nombre de la plantilla', `${name} base`); if (!title?.trim()) return; const pages = commitCurrentPage().map((page) => ({ ...page, json: exportSafeJSON(page.json) })); await saveLibrary('templates', { id: createRecordId(title), name: title.trim(), pages }); await refreshLibraries(); setStatus(`Plantilla “${title.trim()}” guardada en este navegador`); }
+  async function useTemplate(id: string) {
+    const data = await getLibrary('templates', id); if (!data || !Array.isArray(data.pages) || !canvas.current) return;
+    const sourcePages = data.pages as PageData[];
+    const cloned = await Promise.all(sourcePages.map(async (page, index) => ({ ...page, id: `page-${Date.now()}-${index}`, json: await hydrateCanvasJSON(page.json) })));
+    setPagesSynced(cloned); const first = cloned[0]; setActivePageId(first.id); restoring.current = true;
+    canvas.current.setDimensions({ width: first.w, height: first.h }); setSize({ w: first.w, h: first.h }); setCustomWidth(String(first.w)); setCustomHeight(String(first.h));
+    await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); canvas.current.backgroundColor = first.bg; attachCrop(canvas.current); canvas.current.requestRenderAll(); restoring.current = false;
+    setProjectId(''); savedNameRef.current = ''; setName(`${data.name} copia`); history.current = []; historyIndex.current = -1; snapshot(); syncUi(); setStatus('Plantilla aplicada como documento nuevo');
+  }
+  async function uploadBrandAssets(files: FileList | null, kind: 'logos' | 'images') { if (!files?.length) return; setBrandSaving(true); try { const uploaded: string[] = []; for (const file of [...files]) uploaded.push((await saveAsset(file, file.name)).url); setBrandDraft((current) => ({ ...current, [kind]: [...current[kind], ...uploaded] })); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude guardar los recursos de marca'); } finally { setBrandSaving(false); } }
   function openNewBrand() { setEditingBrandId(''); setBrandDraft({ name: '', fontFamily: 'Arial', colors: [...BRAND_PALETTES[0].colors], logos: [], images: [] }); setBrandModalOpen(true); }
   function editBrand(kit: BrandKit) { setEditingBrandId(kit.id); setBrandDraft({ name: kit.name, fontFamily: kit.fontFamily, colors: [...kit.colors], logos: [...kit.logos], images: [...kit.images] }); setBrandModalOpen(true); }
-  async function saveBrand(event: React.FormEvent) { event.preventDefault(); const title = brandDraft.name.trim(); if (!title) return setStatus('Escribe un nombre para el kit'); setBrandSaving(true); try { const fontLoaded = await ensureGoogleFont(brandDraft.fontFamily); if (!fontLoaded) setStatus(`Kit guardado con fuente alternativa a ${brandDraft.fontFamily}`); const response = await fetch('/api/library/brands', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...brandDraft, id: editingBrandId, name: title }) }); const result = await response.json(); if (!response.ok || !result.id) throw new Error(result.error || 'No se confirmó el guardado'); await refreshLibraries(); setPalette(brandDraft.colors); setBrandModalOpen(false); setEditingBrandId(''); setBrandDraft({ name: '', fontFamily: 'Arial', colors: BRAND_PALETTES[0].colors, logos: [], images: [] }); setStatus(`Kit “${title}” ${editingBrandId ? 'actualizado' : 'creado'}`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude guardar el kit'); } finally { setBrandSaving(false); } }
-  async function deleteBrand() { if (!editingBrandId || !window.confirm(`¿Eliminar el kit “${brandDraft.name}”? Los recursos originales permanecerán en assets.`)) return; setBrandSaving(true); try { const response = await fetch(`/api/library/brands/${editingBrandId}`, { method: 'DELETE' }); const result = await response.json(); if (!response.ok || !result.deleted) throw new Error(result.error || 'No se confirmó la eliminación'); if (activeBrandId === editingBrandId) setActiveBrandId(''); setBrandModalOpen(false); setEditingBrandId(''); await refreshLibraries(); setStatus(`Kit “${brandDraft.name}” eliminado`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude eliminar el kit'); } finally { setBrandSaving(false); } }
-  async function useBrand(id: string) { const data = await (await fetch(`/api/library/brands/${id}`)).json(); if (Array.isArray(data.colors)) setPalette(data.colors); if (data.fontFamily) { const loaded = await ensureGoogleFont(data.fontFamily); if (!loaded) setStatus(`No pude cargar ${data.fontFamily}; se usará una fuente alternativa`); if (inspector.isText) patchObject({ fontFamily: data.fontFamily }); } setActiveBrandId(id); setStatus(`Kit “${data.name}” activo · selecciona un recurso para insertarlo`); }
-  async function addBrandAsset(src: string, label: string) { try { if (src.toLowerCase().includes('.svg')) { const response = await fetch(src); if (!response.ok) throw new Error('No pude leer el SVG'); const { objects, options } = await fabric.loadSVGFromString(await response.text()); const valid = objects.filter((object): object is fabric.FabricObject => Boolean(object)); if (!valid.length) throw new Error('El SVG está vacío'); const vector = fabric.util.groupSVGElements(valid, options); const scale = 320 / Math.max(vector.width || 320, vector.height || 320); vector.set({ scaleX: scale, scaleY: scale, originX: 'center', originY: 'center' }); add(vector); } else { const image = await fabric.FabricImage.fromURL(src, { crossOrigin: 'anonymous' }); const scale = Math.min(600 / (image.width || 1), 600 / (image.height || 1), 1); image.scale(scale); add(image); if (canvas.current) attachCrop(canvas.current); } setStatus(`${label} insertado desde el kit de marca`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude insertar el recurso de marca'); } }
+  async function saveBrand(event: React.FormEvent) { event.preventDefault(); const title = brandDraft.name.trim(); if (!title) return setStatus('Escribe un nombre para el kit'); setBrandSaving(true); try { const fontLoaded = await ensureGoogleFont(brandDraft.fontFamily); if (!fontLoaded) setStatus(`Kit guardado con fuente alternativa a ${brandDraft.fontFamily}`); const id = editingBrandId || createRecordId(title); await saveLibrary('brands', { ...brandDraft, id, name: title, logos: brandDraft.logos.map(stableAssetReference), images: brandDraft.images.map(stableAssetReference) }); await refreshLibraries(); setPalette(brandDraft.colors); setBrandModalOpen(false); setEditingBrandId(''); setBrandDraft({ name: '', fontFamily: 'Arial', colors: BRAND_PALETTES[0].colors, logos: [], images: [] }); setStatus(`Kit “${title}” ${editingBrandId ? 'actualizado' : 'creado'} en este navegador`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude guardar el kit'); } finally { setBrandSaving(false); } }
+  async function deleteBrand() { if (!editingBrandId || !window.confirm(`¿Eliminar el kit “${brandDraft.name}”? Los recursos quedan disponibles para tus proyectos.`)) return; setBrandSaving(true); try { await deleteLibrary('brands', editingBrandId); if (activeBrandId === editingBrandId) setActiveBrandId(''); setBrandModalOpen(false); setEditingBrandId(''); await refreshLibraries(); setStatus(`Kit “${brandDraft.name}” eliminado`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude eliminar el kit'); } finally { setBrandSaving(false); } }
+  async function useBrand(id: string) { const data = await getLibrary('brands', id); if (!data) return; if (Array.isArray(data.colors)) setPalette(data.colors as string[]); if (typeof data.fontFamily === 'string') { const loaded = await ensureGoogleFont(data.fontFamily); if (!loaded) setStatus(`No pude cargar ${data.fontFamily}; se usará una fuente alternativa`); if (inspector.isText) patchObject({ fontFamily: data.fontFamily }); } setActiveBrandId(id); setStatus(`Kit “${data.name}” activo · selecciona un recurso para insertarlo`); }
+  async function addBrandAsset(src: string, label: string) {
+    try {
+      const response = await fetch(src); if (!response.ok) throw new Error('No pude leer el recurso del kit');
+      const blob = await response.blob();
+      if (blob.type === 'image/svg+xml' || src.toLowerCase().includes('.svg')) {
+        const { objects, options } = await fabric.loadSVGFromString(await blob.text());
+        const valid = objects.filter((object): object is fabric.FabricObject => Boolean(object)); if (!valid.length) throw new Error('El SVG está vacío');
+        const vector = fabric.util.groupSVGElements(valid, options); const scale = 320 / Math.max(vector.width || 320, vector.height || 320);
+        vector.set({ scaleX: scale, scaleY: scale, originX: 'center', originY: 'center' }); add(vector);
+      } else {
+        const asset = await saveAsset(blob, label); const image = await fabric.FabricImage.fromURL(asset.url); const scale = Math.min(600 / (image.width || 1), 600 / (image.height || 1), 1);
+        image.scale(scale); add(image); if (canvas.current) attachCrop(canvas.current);
+      }
+      setStatus(`${label} insertado desde el kit de marca`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude insertar el recurso de marca'); }
+  }
   async function renderPages(format: 'png' | 'jpeg') {
     const c = canvas.current;
     if (!c) return [];
@@ -329,7 +417,7 @@ export default function Editor() {
     try {
       for (const page of list) {
         c.setDimensions({ width: page.w, height: page.h });
-        await c.loadFromJSON(exportSafeJSON(page.json));
+        await c.loadFromJSON(page.json);
         await prepareCanvasFonts(c);
         c.backgroundColor = page.bg;
         c.discardActiveObject();
@@ -364,11 +452,9 @@ export default function Editor() {
       if (!images.length) throw new Error('No hay páginas para exportar');
       if (format === 'png' || format === 'jpeg') {
         const item = images.find(({ page }) => page.id === activePageId) || images[0];
-        const response = await fetch('/api/exports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, dataUrl: item.dataUrl }) });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'No pude guardar la exportación');
-        const a = document.createElement('a'); a.href = item.dataUrl; a.download = result.filename; a.click();
-        return setStatus(`Copia guardada en ${result.path}`);
+        const extension = format === 'jpeg' ? 'jpg' : 'png';
+        const a = document.createElement('a'); a.href = item.dataUrl; a.download = `${safeDownloadName(name)}-${safeDownloadName(item.page.name)}.${extension}`; a.click();
+        return setStatus(`${format.toUpperCase()} descargado a tu dispositivo`);
       }
       if (format === 'zip') {
         const JSZip = (await import('jszip')).default;
@@ -390,7 +476,26 @@ export default function Editor() {
       setStatus(message);
     }
   }
-  function downloadBlob(blob: Blob, filename: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
+  function downloadBlob(blob: Blob, filename: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  function safeDownloadName(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'fragua'; }
+  async function exportBrowserBackup() {
+    setBackupBusy(true); setStatus('Preparando respaldo local…');
+    try {
+      if (canvas.current && !(await saveProject(true))) throw new Error('No pude guardar los cambios antes de crear el respaldo.');
+      const { blob, counts } = await makeBrowserBackup(); downloadBlob(blob, backupFilename());
+      setStatus(`Respaldo descargado · ${counts.projects} proyectos, ${counts.assets} recursos y bibliotecas`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude crear el respaldo'); }
+    finally { setBackupBusy(false); }
+  }
+  async function importBrowserBackup(file?: File) {
+    if (!file) return; setBackupBusy(true); setStatus('Importando respaldo al almacenamiento de este navegador…');
+    try {
+      const result = await restoreBrowserBackup(file); await refreshProjects(); await refreshLibraries();
+      const note = result.jsonOnly ? ' El JSON no incluye imágenes; para conservarlas importa el ZIP de respaldo.' : '';
+      setStatus(`Respaldo importado · ${result.projects} proyectos, ${result.assets} recursos, ${result.templates} plantillas y ${result.brands} kits.${note}`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude importar el respaldo'); }
+    finally { setBackupBusy(false); if (backupFileRef.current) backupFileRef.current.value = ''; }
+  }
 
   useEffect(() => { const key = (e: KeyboardEvent) => { if ((e.target as HTMLElement)?.matches('input, textarea, select')) return; if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); void travel(e.shiftKey ? 1 : -1); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void saveProject(); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); void duplicate(); } if ((e.key === 'Delete' || e.key === 'Backspace')) remove(); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); });
   useEffect(() => { const timer = window.setInterval(() => { if (projectId) void saveProject(true); }, 60_000); return () => window.clearInterval(timer); });
@@ -448,8 +553,20 @@ export default function Editor() {
         <div className="left-panel-content">
         <section><h2>Agregar</h2><div className="tool-grid"><button onClick={addText}><Type/><span>Texto</span></button><button onClick={addRect}><Square/><span>Rectángulo</span></button><button onClick={addCircle}><Circle/><span>Círculo</span></button><button onClick={() => setShapeSoupModalOpen(true)}><Waves/><span>Formas</span></button><label className="tool"><ImagePlus/><span>Imagen</span><input type="file" accept="image/*" hidden onChange={(e) => void uploadImage(e.target.files?.[0])}/></label></div></section>
         <section><h2>Lienzo</h2><label className="field">Formato<select value={SIZES.some((s) => s.w === size.w && s.h === size.h) ? `${size.w}x${size.h}` : 'custom'} onChange={(e) => { if (e.target.value === 'custom') return; const [w,h] = e.target.value.split('x').map(Number); resize(w,h); }}>{SIZES.map((s) => <option key={s.name} value={`${s.w}x${s.h}`}>{s.name} · {s.w}×{s.h}</option>)}<option value="custom">Personalizado · {size.w}×{size.h}</option></select></label><div className="custom-size"><label>Ancho<input type="number" min="64" max="10000" inputMode="numeric" value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label><span>×</span><label>Alto<input type="number" min="64" max="10000" inputMode="numeric" value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label></div><button className="apply-size" onClick={applyCustomSize}>Aplicar tamaño libre</button><button className="secondary-size" onClick={() => void duplicateAndResize()}>Duplicar y redimensionar</button><p className="size-help">De 64 a 10,000 px por lado.</p><label className="field">Fondo<input type="color" value={String(canvas.current?.backgroundColor || '#ffffff')} onChange={(e) => { if (canvas.current) { canvas.current.backgroundColor = e.target.value; canvas.current.requestRenderAll(); snapshot(); } }}/></label></section>
-        <section><h2>Biblioteca</h2><div className="media-tabs"><button className={mediaMode === 'photos' ? 'active' : ''} onClick={() => setMediaMode('photos')}>Fotos</button><button className={mediaMode === 'icons' ? 'active' : ''} onClick={() => setMediaMode('icons')}>Iconos</button></div><form className="media-search" onSubmit={(e) => void searchMedia(e)}><input aria-label={mediaMode === 'photos' ? 'Buscar en Pexels' : 'Buscar en Iconify'} value={mediaQuery} onChange={(e) => setMediaQuery(e.target.value)} placeholder={mediaMode === 'photos' ? 'Buscar fotos…' : 'Buscar iconos…'}/><button disabled={mediaLoading}>{mediaLoading ? '…' : 'Buscar'}</button></form>{mediaMode === 'photos' ? <div className="media-grid">{media.map((item) => <button key={item.id} onClick={() => void addStockImage(item)} title={`${item.alt} · ${item.photographer}`}><img src={item.thumb} alt={item.alt || `Foto de ${item.photographer}`}/><span>{item.photographer}</span></button>)}</div> : <div className="icon-grid">{icons.map((icon) => { const [prefix, iconName] = icon.split(':'); return <button key={icon} title={icon} onClick={() => void addIcon(icon)}><img src={`/api/media/icons/${prefix}/${iconName}?color=%2318181b`} alt=""/><span>{iconName}</span></button>; })}</div>}</section>
-        <section><h2>Abrir proyecto</h2><select aria-label="Abrir proyecto" value="" onChange={(e) => void loadProject(e.target.value)}><option value="">Seleccionar…</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select><p className="hint"><FolderOpen/> {projects.length} guardado{projects.length === 1 ? '' : 's'} localmente</p></section>
+        <section>
+          <h2>Biblioteca</h2>
+          <div className="media-tabs"><button className={mediaMode === 'photos' ? 'active' : ''} onClick={() => setMediaMode('photos')}>Fotos</button><button className={mediaMode === 'icons' ? 'active' : ''} onClick={() => setMediaMode('icons')}>Iconos</button></div>
+          <form className="media-search" onSubmit={(e) => void searchMedia(e)}><input aria-label={mediaMode === 'photos' ? 'Buscar en Pexels' : 'Buscar en Iconify'} value={mediaQuery} onChange={(e) => setMediaQuery(e.target.value)} placeholder={mediaMode === 'photos' ? 'Buscar fotos…' : 'Buscar iconos…'}/><button disabled={mediaLoading}>{mediaLoading ? '…' : 'Buscar'}</button></form>
+          {mediaMode === 'photos' && <div className="pexels-tools"><a href="https://www.pexels.com" target="_blank" rel="noreferrer">Fotos proporcionadas por Pexels</a>{editingPexelsKey ? <form onSubmit={(e) => { e.preventDefault(); savePexelsKey(); }}><label>Tu clave API de Pexels<input type="password" autoComplete="off" value={pexelsKeyDraft} onChange={(e) => setPexelsKeyDraft(e.target.value)} placeholder="Pega aquí tu clave"/></label><small>Se guarda solo en este navegador y no se incluye en los proyectos ni respaldos. Pexels recibe la clave al buscar.</small><div><button type="submit">Guardar clave</button><button type="button" onClick={() => { setPexelsKeyDraft(pexelsKey); setEditingPexelsKey(false); }}>Cancelar</button>{pexelsKey && <button type="button" onClick={() => { setPexelsKeyDraft(''); window.localStorage.removeItem('fragua.pexels-key'); setPexelsKey(''); setEditingPexelsKey(false); }}>Quitar</button>}</div></form> : <button className="pexels-key-button" onClick={() => { setPexelsKeyDraft(pexelsKey); setEditingPexelsKey(true); }}>{pexelsKey ? 'Cambiar clave de Pexels' : 'Configurar clave de Pexels'}</button>}</div>}
+          {mediaMode === 'photos' ? <div className="media-grid">{media.map((item) => <button key={item.id} onClick={() => void addStockImage(item)} title={`${item.alt} · ${item.photographer}`}><img src={item.thumb} alt={item.alt || `Foto de ${item.photographer}`}/><span>{item.photographer}</span></button>)}</div> : <div className="icon-grid">{icons.map((icon) => { const [prefix, iconName] = icon.split(':'); return <button key={icon} title={icon} onClick={() => void addIcon(icon)}><img src={`https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(iconName)}.svg?color=%2318181b`} alt=""/><span>{iconName}</span></button>; })}</div>}
+        </section>
+        <section>
+          <h2>Abrir proyecto</h2>
+          <select aria-label="Abrir proyecto" value="" onChange={(e) => void loadProject(e.target.value)}><option value="">Seleccionar…</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <p className="hint"><FolderOpen/> {projects.length} guardado{projects.length === 1 ? '' : 's'} en este navegador</p>
+          <div className="backup-actions"><button className="wide-action" onClick={() => void exportBrowserBackup()} disabled={backupBusy}><Download/> {backupBusy ? 'Procesando…' : 'Descargar respaldo ZIP'}</button><label className={`wide-action ${backupBusy ? 'is-disabled' : ''}`}><FolderOpen/> Importar respaldo<input ref={backupFileRef} type="file" accept=".zip,.json,application/zip,application/json" hidden disabled={backupBusy} onChange={(e) => void importBrowserBackup(e.target.files?.[0])}/></label></div>
+          <p className="local-storage-note">Proyectos y recursos viven en el almacenamiento de este navegador. Descarga respaldos ZIP con JSON, imágenes, plantillas y kits; impórtalos en otro navegador o dominio.</p>
+        </section>
         <section><h2>Plantillas</h2><button className="wide-action" onClick={() => void saveTemplate()}><Save/> Guardar como plantilla</button><select aria-label="Usar plantilla" value="" onChange={(e) => void useTemplate(e.target.value)}><option value="">Usar una plantilla…</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></section>
         <section><h2>Kits de marca</h2><button className="wide-action" onClick={openNewBrand}><Plus/> Crear kit de marca</button><div className="brand-grid">{brands.map((kit) => { const preview = kit.images[0] || kit.logos[0]; return <button key={kit.id} className={`brand-card ${kit.id === activeBrandId ? 'active' : ''}`} onClick={() => void useBrand(kit.id)} onDoubleClick={(event) => { event.preventDefault(); editBrand(kit); }} title="Clic para activar · doble clic para editar"><div className="brand-visual">{preview ? <img src={preview} alt=""/> : <span style={{ background: kit.colors[0] || '#eee' }}/>}<div className="brand-colors">{kit.colors.slice(0,3).map((color) => <i key={color} style={{ background: color }}/>)}</div></div><strong style={{ fontFamily: kit.fontFamily }}>{kit.name}</strong><small>{kit.fontFamily}</small></button>; })}</div>{activeBrandId && (() => { const kit = brands.find((item) => item.id === activeBrandId); if (!kit) return null; return <div className="brand-assets"><h3>Recursos de {kit.name}</h3>{kit.logos.length > 0 && <><small>Logos</small><div>{kit.logos.map((src, index) => <button key={src} onClick={() => void addBrandAsset(src, `Logo ${index + 1}`)} title="Insertar logo"><img src={src} alt={`Logo ${index + 1}`}/></button>)}</div></>}{kit.images.length > 0 && <><small>Imágenes</small><div>{kit.images.map((src, index) => <button key={src} onClick={() => void addBrandAsset(src, `Imagen ${index + 1}`)} title="Insertar imagen"><img src={src} alt={`Imagen ${index + 1}`}/></button>)}</div></>}{!kit.logos.length && !kit.images.length && <p className="size-help">Este kit no tiene recursos visuales.</p>}</div>; })()}{!brands.length && <p className="size-help">Todavía no hay kits. Crea el primero.</p>}</section>
         </div>

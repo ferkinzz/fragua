@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Créditos y avisos',
   description: 'Licencias de software, créditos y notas de privacidad de Fragua.',
-  alternates: { canonical: '/legal' },
+  alternates: { canonical: '/legal/' },
 };
 
 const projects = [
@@ -31,8 +31,8 @@ export default function LegalPage() {
     </section>
     <section className="info-callout">
       <h2>Privacidad y despliegues</h2>
-      <p>El editor trabaja en el navegador, pero esta versión usa rutas de servidor para guardar proyectos, recibir imágenes, administrar recursos y conservar exportaciones. En el uso local, esas rutas escriben en el equipo que ejecuta la aplicación. En un despliegue con backend, los archivos llegan al servidor que lo aloja. Las búsquedas externas también envían consultas a sus respectivos proveedores.</p>
-      <p>Una futura versión estática y local-first tendría que mover documentos y assets a almacenamiento del navegador y ofrecer copias portables. Este aviso describe el comportamiento del código actual, no una promesa de que el alojamiento sea local ni una política legal completa.</p>
+      <p>Los proyectos, kits, plantillas e imágenes se conservan en IndexedDB dentro del navegador y no se envían al servidor que aloja Fragua. El almacenamiento es independiente para cada perfil y dominio, no se sincroniza y puede ser eliminado por el navegador. Usa el respaldo ZIP para conservar o transferir tus datos.</p>
+      <p>La clave personal de Pexels se guarda en el almacenamiento local del navegador y se envía a Pexels al buscar fotos; no se incluye en los respaldos. Consultas de fotos e iconos y cargas de Google Fonts se conectan directamente con esos proveedores. No introduzcas una clave propia en un equipo o perfil compartido. Esto describe el comportamiento técnico de la aplicación, no constituye una política legal completa.</p>
     </section>
     <section>
       <h2>Marcas</h2>
