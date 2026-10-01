@@ -201,10 +201,33 @@ export default function Editor() {
 
   useEffect(() => {
     if (!canvasNode.current) return;
-    const c = new fabric.Canvas(canvasNode.current, { width: size.w, height: size.h, backgroundColor: '#ffffff', preserveObjectStacking: true, selectionColor: 'rgba(255,77,109,.12)', selectionBorderColor: '#ff4d6d', defaultCursor: 'default' });
+    const c = new fabric.Canvas(canvasNode.current, { width: size.w, height: size.h, backgroundColor: '#ffffff', preserveObjectStacking: true, selectionColor: 'rgba(255,77,109,.12)', selectionBorderColor: '#ff4d6d', selectionLineWidth: 2, defaultCursor: 'default' });
     canvas.current = c;
+    const styledBorders = new WeakSet<fabric.FabricObject>();
+    const styleActiveControls = () => {
+      const active = c.getActiveObject();
+      if (!active) return;
+      active.set({ borderColor: '#ff4d6d', borderScaleFactor: 2.5, cornerSize: 12, cornerColor: '#ff4d6d', cornerStrokeColor: '#ffffff', transparentCorners: false });
+      if (!styledBorders.has(active)) {
+        const drawBorders = active.drawBorders.bind(active);
+        active.drawBorders = ((ctx, options, styleOverride) => {
+          ctx.save();
+          ctx.lineWidth = 6;
+          drawBorders(ctx, options, { ...styleOverride, borderColor: '#ffffff' });
+          ctx.restore();
+          ctx.save();
+          ctx.lineWidth = 2.5;
+          drawBorders(ctx, options, { ...styleOverride, borderColor: '#ff4d6d' });
+          ctx.restore();
+        }) as typeof active.drawBorders;
+        styledBorders.add(active);
+      }
+      active.setCoords();
+    };
     c.on('object:added', snapshot); c.on('object:modified', snapshot); c.on('object:removed', snapshot);
-    c.on('selection:created', syncUi); c.on('selection:updated', syncUi); c.on('selection:cleared', syncUi);
+    c.on('selection:created', () => { styleActiveControls(); syncUi(); });
+    c.on('selection:updated', () => { styleActiveControls(); syncUi(); });
+    c.on('selection:cleared', syncUi);
     c.on('object:added', () => attachCrop(c));
     c.on('mouse:down', (event) => {
       const nativeEvent = event.e as MouseEvent | PointerEvent;
