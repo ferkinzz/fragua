@@ -714,7 +714,44 @@ export default function Editor() {
       setLastSaved(new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })); setStatus(`Proyecto abierto · ${incoming.length} página${incoming.length === 1 ? '' : 's'}`);
     } catch (error) { restoring.current = false; setStatus(error instanceof Error ? error.message : 'No pude abrir el proyecto'); }
   }
-  async function duplicateAndResize() { const c = canvas.current; if (!c) return; const w = Math.round(Number(customWidth)); const h = Math.round(Number(customHeight)); if (w < 64 || h < 64 || w > 10000 || h > 10000) return setStatus('Define primero medidas válidas'); commitCurrentPage(); const temp = new fabric.StaticCanvas(undefined, { width: w, height: h, backgroundColor: c.backgroundColor }); await temp.loadFromJSON(c.toJSON()); const sx = w / c.width; const sy = h / c.height; temp.getObjects().forEach((o) => o.set({ left: (o.left ?? 0) * sx, top: (o.top ?? 0) * sy, scaleX: (o.scaleX ?? 1) * sx, scaleY: (o.scaleY ?? 1) * sy })); const page: PageData = { id: `page-${Date.now()}`, name: `Página ${pagesRef.current.length + 1} · ${w}×${h}`, w, h, bg: String(c.backgroundColor || '#fff'), json: temp.toJSON() }; temp.dispose(); setPagesSynced([...pagesRef.current, page]); await openPage(page.id); setStatus(`Copia creada en ${w} × ${h}px`); }
+  async function duplicateAndResize() {
+    const c = canvas.current;
+    if (!c) return;
+    const w = Math.round(Number(customWidth));
+    const h = Math.round(Number(customHeight));
+    if (w < 64 || h < 64 || w > 10000 || h > 10000) return setStatus('Define medidas entre 64 y 10,000 px por lado');
+    const sourceWidth = c.width;
+    const sourceHeight = c.height;
+    if (!sourceWidth || !sourceHeight) return setStatus('El lienzo actual no tiene medidas válidas');
+    setStatus(`Creando copia a ${w} × ${h}px…`);
+    try {
+      const list = commitCurrentPage();
+      const sx = w / sourceWidth;
+      const sy = h / sourceHeight;
+      const json = JSON.parse(JSON.stringify(c.toJSON())) as { objects?: Array<Record<string, unknown>>; [key: string]: unknown };
+      (json.objects || []).forEach((object) => {
+        object.left = Number(object.left || 0) * sx;
+        object.top = Number(object.top || 0) * sy;
+        object.scaleX = Number(object.scaleX ?? 1) * sx;
+        object.scaleY = Number(object.scaleY ?? 1) * sy;
+      });
+      const page: PageData = { id: `page-${Date.now()}`, name: `Página ${list.length + 1} · ${w}×${h}`, w, h, bg: String(c.backgroundColor || '#fff'), json };
+      setPagesSynced([...list, page]);
+      restoring.current = true;
+      c.discardActiveObject();
+      c.setDimensions({ width: w, height: h });
+      await c.loadFromJSON(page.json);
+      await prepareCanvasFonts(c);
+      c.backgroundColor = page.bg;
+      setSize({ w, h }); setCustomWidth(String(w)); setCustomHeight(String(h)); setActivePageId(page.id);
+      syncBackgroundInputs(page.bg); attachCrop(c); c.requestRenderAll();
+      history.current = []; historyIndex.current = -1; restoring.current = false; snapshot(); syncUi();
+      setStatus(`Copia creada: ${sourceWidth} × ${sourceHeight} → ${w} × ${h}px`);
+    } catch (error) {
+      restoring.current = false;
+      setStatus(error instanceof Error ? `No pude redimensionar: ${error.message}` : 'No pude duplicar y redimensionar el documento');
+    }
+  }
   async function saveTemplate() { const title = window.prompt('Nombre de la plantilla', `${name} base`); if (!title?.trim()) return; const pages = commitCurrentPage().map((page) => ({ ...page, json: exportSafeJSON(page.json) })); await saveLibrary('templates', { id: createRecordId(title), name: title.trim(), pages }); await refreshLibraries(); setStatus(`Plantilla “${title.trim()}” guardada en este navegador`); }
   async function useTemplate(id: string) {
     const data = await getLibrary('templates', id); if (!data || !Array.isArray(data.pages) || !canvas.current) return;
