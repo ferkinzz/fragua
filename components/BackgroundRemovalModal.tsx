@@ -2,10 +2,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ProgressInfo, RawImage } from '@huggingface/transformers';
 import { Eraser, X } from 'lucide-react';
 
 type Props = { source: HTMLCanvasElement; onClose: () => void; onInsert: (image: Blob) => Promise<void> };
+type ProgressInfo = { status?: string; progress?: number };
+type RawImage = { width: number; height: number; channels: number; data: Uint8Array };
 type ModelRunner = (image: HTMLCanvasElement) => Promise<RawImage>;
 
 let runnerPromise: Promise<ModelRunner> | null = null;
@@ -13,7 +14,11 @@ let runnerPromise: Promise<ModelRunner> | null = null;
 function getModelRunner(onProgress: (progress: ProgressInfo) => void): Promise<ModelRunner> {
   if (!runnerPromise) {
     runnerPromise = (async () => {
-      const { pipeline } = await import('@huggingface/transformers');
+      // Keep Transformers.js and its ONNX WASM out of Next's static asset graph.
+      // Pages rejects the 25.6 MiB threaded WASM; native import fetches the runtime
+      // from jsDelivr only when the user opens this tool.
+      const runtimeUrl = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.web.js';
+      const { pipeline } = await import(/* webpackIgnore: true */ runtimeUrl);
       const device = 'gpu' in navigator ? 'webgpu' : 'wasm';
       try {
         const remover = await pipeline('background-removal', 'Xenova/modnet', { device, progress_callback: onProgress });
@@ -63,7 +68,7 @@ export default function BackgroundRemovalModal({ source, onClose, onInsert }: Pr
       try {
         setSourcePreview(source.toDataURL('image/png'));
         const runner = await getModelRunner((info) => {
-          if (!cancelled && info.status === 'progress_total') setProgress(Math.round(info.progress));
+          if (!cancelled && info.status === 'progress_total') setProgress(Math.round(info.progress ?? 0));
         });
         if (cancelled) return;
         setPhase('processing');
