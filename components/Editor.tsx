@@ -78,7 +78,18 @@ function opaqueCanvasColor(value: unknown) {
   const channels = [1, 3, 5].map((start) => Math.round(parseInt(color.slice(start, start + 2), 16) * alpha + 255 * (1 - alpha)));
   return `rgb(${channels.join(', ')})`;
 }
-(fabric.FabricObject as typeof fabric.FabricObject & { customProperties: string[] }).customProperties = ['name', 'fraguaMaskId', 'fraguaMaskOwnerId'];
+(fabric.FabricObject as typeof fabric.FabricObject & { customProperties: string[] }).customProperties = [
+  'name',
+  'fraguaMaskId',
+  'fraguaMaskOwnerId',
+  'selectable',
+  'evented',
+  'lockMovementX',
+  'lockMovementY',
+  'lockScalingX',
+  'lockScalingY',
+  'lockRotation',
+];
 
 export default function Editor() {
   const canvasNode = useRef<HTMLCanvasElement>(null);
