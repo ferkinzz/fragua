@@ -4,7 +4,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
 import { enterCropMode } from 'fabric/extensions';
-import { AlignCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, BringToFront, ChevronRight, Circle, Copy, Crop, Download, Eye, EyeOff, FilePlus2, FolderOpen, Group, ImagePlus, Layers3, Lock, Magnet, Pipette, Plus, Redo2, Save, SendToBack, Square, Trash2, Type, Ungroup, Unlock, Undo2, WandSparkles, X } from 'lucide-react';
+import { AlignCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, BringToFront, ChevronRight, Circle, Copy, Crop, Download, Eye, EyeOff, FilePlus2, FolderOpen, Group, ImagePlus, Layers3, Lock, Magnet, Moon, Pipette, Plus, Redo2, Save, SendToBack, Square, Sun, Trash2, Type, Ungroup, Unlock, Undo2, WandSparkles, X } from 'lucide-react';
 import ColorExtractorModal from './ColorExtractorModal';
 import ImageTraceModal from './ImageTraceModal';
 import ShapeSoupModal from './ShapeSoupModal';
@@ -77,6 +77,8 @@ export default function Editor() {
   const loadedGoogleFonts = useRef(new Set<string>());
   const settledFontRequests = useRef(new Set<string>());
   const [name, setName] = useState('Mi diseño');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const themeReady = useRef(false);
   const [projectId, setProjectId] = useState('');
   const [size, setSize] = useState({ w: 1080, h: 1080 });
   const [customWidth, setCustomWidth] = useState('1080');
@@ -198,6 +200,17 @@ export default function Editor() {
     const key = window.localStorage.getItem('fragua.pexels-key') || '';
     setPexelsKey(key); setPexelsKeyDraft(key);
   }, []);
+
+  useEffect(() => {
+    const savedTheme = document.cookie.split('; ').find((item) => item.startsWith('fragua-theme='))?.split('=')[1];
+    if (savedTheme === 'dark' || savedTheme === 'light') setTheme(savedTheme);
+    themeReady.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!themeReady.current) return;
+    document.cookie = `fragua-theme=${theme}; max-age=31536000; path=/; SameSite=Lax`;
+  }, [theme]);
 
   useEffect(() => {
     if (!canvasNode.current) return;
@@ -743,11 +756,11 @@ export default function Editor() {
     return () => { observer.disconnect(); document.removeEventListener('click', click); document.removeEventListener('keydown', key); };
   }, []);
 
-  return <main className="app-shell">
+  return <main className="app-shell" data-theme={theme}>
     <header className="topbar">
       <div className="brand"><span className="brand-mark">F</span><div><strong>Fragua</strong><small>Editor gráfico abierto, local y sin cuentas · <a className="brand-credit" href="https://rtsi.site" target="_blank" rel="noreferrer">.Site de RTSI</a></small></div></div>
       <label className="project-name"><span>Nombre del proyecto</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div className="top-actions"><span className="save-time">{lastSaved}</span><button type="button" className="button ghost" onClick={() => void saveProject()}><Save /> Guardar</button><select className="export-select" aria-label="Formato de exportación" defaultValue="" onChange={(e) => { if (e.target.value) void exportDocument(e.target.value as 'png' | 'jpeg' | 'svg' | 'zip' | 'pdf'); e.target.value = ''; }}><option value="">Exportar…</option><option value="png">PNG actual</option><option value="jpeg">JPEG actual</option><option value="svg">SVG actual</option><option value="zip">Todas · ZIP</option><option value="pdf">Todas · PDF</option></select><button type="button" className="button primary" onClick={() => void exportDocument('png')}><Download /> PNG</button></div>
+      <div className="top-actions"><span className="save-time">{lastSaved}</span><button type="button" className="button theme-toggle" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'} title={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}>{theme === 'dark' ? <Sun /> : <Moon />}</button><button type="button" className="button ghost" onClick={() => void saveProject()}><Save /> Guardar</button><select className="export-select" aria-label="Formato de exportación" defaultValue="" onChange={(e) => { if (e.target.value) void exportDocument(e.target.value as 'png' | 'jpeg' | 'svg' | 'zip' | 'pdf'); e.target.value = ''; }}><option value="">Exportar…</option><option value="png">PNG actual</option><option value="jpeg">JPEG actual</option><option value="svg">SVG actual</option><option value="zip">Todas · ZIP</option><option value="pdf">Todas · PDF</option></select><button type="button" className="button primary" onClick={() => void exportDocument('png')}><Download /> PNG</button></div>
     </header>
     <div className="workspace">
       <aside className="sidebar left-panel">
