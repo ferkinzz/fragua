@@ -81,6 +81,14 @@
 .wide-action:hover { border-color: var(--ink); background: var(--wash); }
 .wide-action svg { width: 17px; }
 .section-help { margin: -7px 0 10px; color: var(--muted); font-size: 11px; }
+.paint-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.paint-controls label { min-width: 0; padding: 8px; display: grid; grid-template-columns: 34px minmax(0,1fr); align-items: center; gap: 2px 7px; border: 1px solid var(--line); background: var(--wash); cursor: pointer; }
+.paint-controls label.active { border-color: var(--accent-dark); box-shadow: inset 0 -3px var(--accent); }
+.paint-controls label > span { grid-column: 1/-1; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.paint-controls input[type=color] { grid-row: 2/4; width: 34px; height: 34px; padding: 2px; border: 1px solid var(--line); background: #fff; }
+.paint-controls code { min-width: 0; overflow: hidden; color: var(--ink); font-size: 10px; text-overflow: ellipsis; text-transform: uppercase; }
+.paint-controls label:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.stroke-width-control { margin-bottom: 12px; }
 .align-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .align-grid button { min-height: 40px; border: 1px solid var(--line); background: #fff; }
 .align-grid button:hover { border-color: var(--ink); background: var(--wash); }
