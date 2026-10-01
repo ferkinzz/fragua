@@ -1,10 +1,19 @@
+'use client';
+
 // SPDX-License-Identifier: MPL-2.0
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 export default function InfoPage({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
-  return <main className="info-page">
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    const savedTheme = document.cookie.split('; ').find((cookie) => cookie.startsWith('fragua-theme='))?.split('=')[1];
+    if (savedTheme === 'dark' || savedTheme === 'light') setTheme(savedTheme);
+  }, []);
+
+  return <main className="info-page" data-theme={theme}>
     <header className="info-header">
       <Link className="info-brand" href="/" aria-label="Fragua, volver al editor"><span>F</span><strong>Fragua</strong></Link>
       <nav aria-label="Navegación de información">

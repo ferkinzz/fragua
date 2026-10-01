@@ -279,6 +279,24 @@
 .credit-list li span { color: #62605e; font-size: 13px; text-align: right; }
 .info-footer { min-height: 58px; padding: 14px clamp(16px,4vw,56px); display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #e7e3df; background: #fff; color: #686462; font-size: 12px; }
 .info-footer a { color: #874016; }
+.info-page[data-theme="dark"] { background: #25262d; color: #eeeef2; }
+.info-page[data-theme="dark"] .info-header,.info-page[data-theme="dark"] .info-footer { background: #303139; border-color: #4c4e58; }
+.info-page[data-theme="dark"] .info-brand { color: #eeeef2; }
+.info-page[data-theme="dark"] .info-brand > span { border-color: #18191e; box-shadow: 3px 3px 0 #18191e; }
+.info-page[data-theme="dark"] .info-header nav a,.info-page[data-theme="dark"] .info-back { color: #c6c7ce; }
+.info-page[data-theme="dark"] .info-header nav a:hover,.info-page[data-theme="dark"] .info-header nav a[aria-current=page] { color: #ff9aab; background: #49323b; }
+.info-page[data-theme="dark"] .info-back:hover { color: #ff9aab; }
+.info-page[data-theme="dark"] .info-eyebrow { color: #ff9aab; }
+.info-page[data-theme="dark"] .info-content h1,.info-page[data-theme="dark"] .info-body h2 { color: #f0eff3; }
+.info-page[data-theme="dark"] .info-description { color: #c4c5cd; }
+.info-page[data-theme="dark"] .info-body p,.info-page[data-theme="dark"] .info-body li { color: #d2d2d9; }
+.info-page[data-theme="dark"] .info-body section,.info-page[data-theme="dark"] .credit-list li { border-color: #4c4e58; }
+.info-page[data-theme="dark"] .info-body a,.info-page[data-theme="dark"] .info-footer a { color: #ffb27a; }
+.info-page[data-theme="dark"] .info-body kbd,.info-page[data-theme="dark"] .info-body code { border-color: #555761; background: #25262d; color: #eeeef2; }
+.info-page[data-theme="dark"] .info-body .info-callout { border-color: #554875; background: #34303e; }
+.info-page[data-theme="dark"] .info-callout h2 { color: #e2d5ff; }
+.info-page[data-theme="dark"] .credit-list li span { color: #b8bac4; }
+.info-page[data-theme="dark"] a:focus-visible { outline-color: #8db5ff; }
 @media(max-width:600px) {
   .info-header { align-items: flex-start; flex-direction: column; gap: 6px; padding-block: 12px; }
   .info-header nav { width: 100%; justify-content: space-between; }
