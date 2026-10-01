@@ -21,11 +21,13 @@ function getModelRunner(onProgress: (progress: ProgressInfo) => void): Promise<M
       const { pipeline } = await import(/* webpackIgnore: true */ runtimeUrl);
       const device = 'gpu' in navigator ? 'webgpu' : 'wasm';
       try {
-        const remover = await pipeline('background-removal', 'Xenova/modnet', { device, progress_callback: onProgress });
+        // MODNet's model card recommends fp32 for portrait matting; the smaller
+        // quantized weights can make fine edges (hair, fabric) noticeably rough.
+        const remover = await pipeline('background-removal', 'Xenova/modnet', { device, dtype: 'fp32', progress_callback: onProgress });
         return (image: HTMLCanvasElement) => remover(image);
       } catch (error) {
         if (device !== 'webgpu') throw error;
-        const remover = await pipeline('background-removal', 'Xenova/modnet', { device: 'wasm', progress_callback: onProgress });
+        const remover = await pipeline('background-removal', 'Xenova/modnet', { device: 'wasm', dtype: 'fp32', progress_callback: onProgress });
         return (image: HTMLCanvasElement) => remover(image);
       }
     })().catch((error) => { runnerPromise = null; throw error; });
