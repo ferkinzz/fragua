@@ -10,6 +10,7 @@ Versiones y declaraciones de licencia según `package-lock.json` al preparar est
 | --- | --- | --- |
 | `@shapesoup/core` | 0.2.3 | MIT |
 | `fabric` | 7.4.0 | MIT |
+| `imagetracerjs` | 1.2.6 | Unlicense |
 | `jspdf` | 3.0.3 | MIT |
 | `jszip` | 3.10.1 | MIT o GPL-3.0-or-later (licencia dual) |
 | `lucide-react` | 0.544.0 | ISC |

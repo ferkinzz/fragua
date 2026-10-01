@@ -331,3 +331,34 @@
 .color-modal-footer { margin-top: 16px; padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; border-top: 1px solid var(--line); }
 .color-modal-footer > span { flex: 1; }
 @media(max-width:600px){.color-modal-backdrop{padding:10px}.color-modal{max-height:calc(100vh - 20px)}.color-modal-body{padding:12px}.color-result{gap:7px}.color-result-swatch{width:56px}.color-modal-footer>span{flex-basis:100%}}
+
+.trace-modal-backdrop { position: fixed; inset: 0; z-index: 75; display: grid; place-items: center; padding: 20px; background: rgba(15,15,18,.68); backdrop-filter: blur(3px); }
+.trace-modal { width: min(900px,100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 2px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
+.trace-modal > header { flex: none; min-height: 72px; display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: #fff; border-bottom: 1px solid var(--line); }
+.trace-modal header span { color: var(--accent-dark); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+.trace-modal header h2 { margin: 3px 0 0; font-size: 20px; text-transform: none; letter-spacing: 0; }
+.trace-modal header button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--line); background: #fff; }
+.trace-modal header svg,.trace-modal button svg { width: 17px; height: 17px; }
+.trace-modal button:focus-visible,.trace-modal input:focus-visible,.trace-modal select:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: 2px; }
+.trace-modal button:disabled { opacity: .5; cursor: not-allowed; }
+.trace-modal-body { min-height: 0; overflow-y: auto; padding: 16px 18px 18px; }
+.trace-modal-help,.trace-hint,.trace-stats { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.trace-mode { display: flex; gap: 7px; margin-bottom: 12px; }
+.trace-mode button { min-height: 38px; padding: 0 16px; border: 1px solid var(--line); background: #fff; font-weight: 700; }
+.trace-mode button.active { border-color: var(--ink); background: var(--ink); color: #fff; }
+.trace-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 10px; }
+.trace-options label { min-width: 0; display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.trace-options label span { justify-self: end; margin-top: -24px; }
+.trace-options select { min-height: 38px; }
+.trace-options input[type="range"] { width: 100%; }
+.trace-hint { margin: 0 0 10px; }
+.trace-previews { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trace-previews figure { min-width: 0; margin: 0; }
+.trace-previews figcaption { padding: 6px 8px; border: 1px solid var(--line); border-bottom: 0; font-size: 11px; font-weight: 700; }
+.trace-previews img,.trace-placeholder { width: 100%; height: clamp(180px, 32vh, 320px); display: grid; place-items: center; object-fit: contain; border: 1px solid var(--line); background-color: #f8f8f9; background-image: linear-gradient(45deg,#e9e8eb 25%,transparent 25%),linear-gradient(-45deg,#e9e8eb 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e9e8eb 75%),linear-gradient(-45deg,transparent 75%,#e9e8eb 75%); background-size: 18px 18px; background-position: 0 0,0 9px,9px -9px,-9px 0; }
+.trace-placeholder { padding: 14px; color: var(--muted); font-size: 12px; text-align: center; }
+.trace-error { margin: 10px 0 0; padding: 9px 10px; border: 1px solid #d95a63; background: #fff1f1; color: #8f1d27; font-size: 12px; line-height: 1.4; }
+.trace-stats { min-height: 18px; margin: 9px 0 0; font-size: 11px; }
+.trace-modal-body > footer { margin-top: 12px; padding-top: 12px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); }
+.trace-modal-body > footer .button { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+@media(max-width:600px){.trace-modal-backdrop{padding:10px}.trace-modal{max-height:calc(100vh - 20px)}.trace-modal-body{padding:12px}.trace-options{grid-template-columns:1fr;gap:10px}.trace-previews{grid-template-columns:1fr}.trace-previews img,.trace-placeholder{height:200px}.trace-modal-body>footer{flex-wrap:wrap}.trace-modal-body>footer .button{flex:1;justify-content:center}}
