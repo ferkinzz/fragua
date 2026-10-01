@@ -288,34 +288,60 @@ export default function Editor() {
   function addCircle() { add(new fabric.Circle({ radius: 180, fill: '#3a86ff', originX: 'center', originY: 'center' })); }
   function canCreateMask() {
     const objects = canvas.current?.getActiveObjects() || [];
-    return objects.length === 2 && objects.filter((object) => object.type === 'image').length === 1 && objects.every((object) => object.type === 'image' ? !object.clipPath && !(object as FraguaMaskObject).fraguaMaskId : isClipMaskShape(object));
+    if (objects.length !== 2 || maskEditingId) return false;
+    const images = objects.filter((object) => object.type === 'image');
+    if (images.length === 1) {
+      const shape = objects.find((object) => object !== images[0]);
+      return Boolean(shape && isClipMaskShape(shape) && !shape.clipPath);
+    }
+    if (images.length !== 0) return false;
+    const ordered = canvas.current?.getObjects().filter((object) => objects.includes(object)) || [];
+    return ordered.length === 2 && isClipMaskShape(ordered[0]) && isClipMaskShape(ordered[1]) && !ordered[1].clipPath;
   }
   function createMask() {
     const c = canvas.current; const selectedObjects = c?.getActiveObjects() || [];
     if (!c || selectedObjects.length !== 2) return;
     const image = selectedObjects.find((object) => object.type === 'image') as fabric.FabricImage | undefined;
-    const mask = selectedObjects.find((object) => object !== image);
-    if (!image || !mask || image.clipPath || !isClipMaskShape(mask)) { setStatus('Selecciona una imagen y un texto o vector sin recorte previo'); return; }
+    let content: fabric.FabricObject;
+    let mask: fabric.FabricObject;
+    if (image) {
+      content = image;
+      const shape = selectedObjects.find((object) => object !== image);
+      if (!shape || !isClipMaskShape(shape) || shape.clipPath) { setStatus('Selecciona una imagen y un texto o vector como forma de recorte'); return; }
+      mask = shape;
+    } else {
+      const ordered = c.getObjects().filter((object) => selectedObjects.includes(object));
+      content = ordered[0];
+      mask = ordered[1];
+      if (!content || !mask || !isClipMaskShape(content) || !isClipMaskShape(mask) || mask.clipPath) { setStatus('Selecciona dos vectores: el superior será la forma de recorte'); return; }
+    }
     c.discardActiveObject();
-    const bounds = mask.getBoundingRect(); const center = mask.getCenterPoint();
-    const frameRatio = Math.max(.0001, bounds.width) / Math.max(.0001, bounds.height);
-    let cropX = 0; let cropY = 0; let cropWidth = image.width || 1; let cropHeight = image.height || 1;
-    if (cropWidth / cropHeight > frameRatio) { cropWidth = cropHeight * frameRatio; cropX = ((image.width || cropWidth) - cropWidth) / 2; }
-    else { cropHeight = cropWidth / frameRatio; cropY = ((image.height || cropHeight) - cropHeight) / 2; }
-    const scale = bounds.height / cropHeight;
-    image.set({ cropX, cropY, width: cropWidth, height: cropHeight, scaleX: scale, scaleY: scale, originX: 'center', originY: 'center' });
-    image.setPositionByOrigin(center, 'center', 'center'); image.setCoords();
-    const relativeMaskMatrix = fabric.util.multiplyTransformMatrices(fabric.util.invertTransform(image.calcTransformMatrix()), mask.calcTransformMatrix());
+    if (image && !content.clipPath) {
+      const bounds = mask.getBoundingRect(); const center = mask.getCenterPoint();
+      const frameRatio = Math.max(.0001, bounds.width) / Math.max(.0001, bounds.height);
+      let cropX = 0; let cropY = 0; let cropWidth = image.width || 1; let cropHeight = image.height || 1;
+      if (cropWidth / cropHeight > frameRatio) { cropWidth = cropHeight * frameRatio; cropX = ((image.width || cropWidth) - cropWidth) / 2; }
+      else { cropHeight = cropWidth / frameRatio; cropY = ((image.height || cropHeight) - cropHeight) / 2; }
+      const scale = bounds.height / cropHeight;
+      image.set({ cropX, cropY, width: cropWidth, height: cropHeight, scaleX: scale, scaleY: scale, originX: 'center', originY: 'center' });
+      image.setPositionByOrigin(center, 'center', 'center'); image.setCoords();
+    }
+    const relativeMaskMatrix = fabric.util.multiplyTransformMatrices(fabric.util.invertTransform(content.calcTransformMatrix()), mask.calcTransformMatrix());
     fabric.util.applyTransformToObject(mask, relativeMaskMatrix);
+    if (content.clipPath) {
+      const nestedMaskMatrix = fabric.util.multiplyTransformMatrices(fabric.util.invertTransform(relativeMaskMatrix), content.clipPath.calcTransformMatrix());
+      fabric.util.applyTransformToObject(content.clipPath, nestedMaskMatrix);
+      mask.clipPath = content.clipPath;
+    }
     mask.set({ fill: mask.fill || '#18181b', stroke: null, strokeWidth: 0, opacity: 1, absolutePositioned: false, selectable: false, evented: false, shadow: null });
     const id = `mask-${crypto.randomUUID()}`;
     const label = mask.type === 'textbox' || mask.type === 'i-text' ? String((mask as fabric.Textbox).text || 'texto').replace(/\s+/g, ' ').slice(0, 32) : String((mask as fabric.FabricObject & { name?: string }).name || mask.type);
-    (image as FraguaMaskObject).fraguaMaskId = id;
-    (image as fabric.FabricImage & { name?: string }).name = `Máscara · ${label}`;
-    image.clipPath = mask; image.dirty = true;
+    (content as FraguaMaskObject).fraguaMaskId = id;
+    (content as fabric.FabricObject & { name?: string }).name = `${image ? 'Máscara' : 'Recorte vectorial'} · ${label}`;
+    content.clipPath = mask; content.dirty = true;
     restoring.current = true; c.remove(mask); c.requestRenderAll(); restoring.current = false;
-    c.setActiveObject(image); attachCrop(c); snapshot(); syncUi();
-    setStatus('Máscara creada · doble clic en la imagen para ajustar su contenido');
+    c.setActiveObject(content); attachCrop(c); snapshot(); syncUi();
+    setStatus(image ? 'Máscara creada · doble clic en la imagen para ajustar su contenido' : 'Recorte vectorial creado · los vectores quedan unidos en un solo objeto');
   }
   function beginMaskEditing(image: fabric.FabricObject) {
     const c = canvas.current; const maskedImage = image as FraguaMaskObject;
@@ -668,7 +694,7 @@ export default function Editor() {
       <aside className="sidebar right-panel">
         <div className="right-panel-content">
         <section><h2>Propiedades</h2>{selected ? <><label className="field">Color<input type="color" value={inspector.fill} onChange={(e) => patchObject({ fill: e.target.value })}/></label>{inspector.isText && <div className="text-tools"><label>Fuente<select value={inspector.fontFamily} onChange={(e) => patchObject({ fontFamily: e.target.value })}><option>Arial</option><option>Georgia</option><option>Verdana</option><option>Trebuchet MS</option><option>Courier New</option><option>Times New Roman</option><GoogleFontOptions/></select></label><label>Tamaño<input type="number" min="8" max="500" value={inspector.fontSize} onChange={(e) => patchObject({ fontSize: Number(e.target.value) })}/></label><div className="text-buttons"><button className={Number(inspector.fontWeight) >= 600 ? 'active' : ''} onClick={() => patchObject({ fontWeight: Number(inspector.fontWeight) >= 600 ? 400 : 700 })}><b>B</b></button><button className={inspector.fontStyle === 'italic' ? 'active' : ''} onClick={() => patchObject({ fontStyle: inspector.fontStyle === 'italic' ? 'normal' : 'italic' })}><i>I</i></button><button className={inspector.underline ? 'active' : ''} onClick={() => patchObject({ underline: !inspector.underline })}><u>U</u></button><select aria-label="Alineación del texto" value={inspector.textAlign} onChange={(e) => patchObject({ textAlign: e.target.value })}><option value="left">Izq.</option><option value="center">Centro</option><option value="right">Der.</option><option value="justify">Justificar</option></select></div><label>Espaciado <span>{inspector.charSpacing}</span><input type="range" min="-100" max="500" value={inspector.charSpacing} onChange={(e) => patchObject({ charSpacing: Number(e.target.value) })}/></label><label>Interlínea <span>{inspector.lineHeight.toFixed(1)}</span><input type="range" min="0.7" max="2.5" step="0.1" value={inspector.lineHeight} onChange={(e) => patchObject({ lineHeight: Number(e.target.value) })}/></label></div>}<label className="field">Opacidad <span>{inspector.opacity}%</span><input type="range" min="5" max="100" value={inspector.opacity} onChange={(e) => patchObject({ opacity: Number(e.target.value) / 100 })}/></label><label className="field">Rotación <span>{inspector.angle}°</span><input type="range" min="-180" max="180" value={inspector.angle} onChange={(e) => patchObject({ angle: Number(e.target.value) })}/></label>{inspector.canRound && <label className="field">Radio de esquinas <span>{inspector.radius}%</span><input type="range" min="0" max="100" value={inspector.radius} onChange={(e) => applyRadius(Number(e.target.value))}/></label>}<div className="effect-row"><label><input type="checkbox" checked={inspector.shadowOn} onChange={(e) => applyShadow(e.target.checked)}/> Sombra</label>{inspector.shadowOn && <span>{inspector.shadowIntensity}%</span>}</div>{inspector.shadowOn && <label className="field shadow-slider">Intensidad<input type="range" min="0" max="100" value={inspector.shadowIntensity} onChange={(e) => applyShadow(true, Number(e.target.value))}/></label>}{inspector.isImage && <><button className="wide-action" onClick={cropSelected}><Crop/> Recortar imagen</button><label className="wide-action"><ImagePlus/> Reemplazar imagen<input type="file" accept="image/*" hidden onChange={(e) => void replaceImage(e.target.files?.[0])}/></label></>}<div className="row"><button onClick={center}><AlignCenter/> Centrar</button><button onClick={() => layer('front')}><BringToFront/> Frente</button><button onClick={() => layer('back')}><SendToBack/> Fondo</button></div></> : <div className="empty">Selecciona un elemento para editarlo.</div>}</section>
-        {selected && <section><h2>Alinear</h2><p className="section-help">{selectionType === 'multiple' ? 'Respecto a la selección' : 'Respecto al lienzo'}</p><div className="align-grid"><button title="Izquierda" aria-label="Alinear a la izquierda" onClick={() => selectionType === 'multiple' ? alignSelection('left') : alignToCanvas('left')}><AlignHorizontalJustifyStart/></button><button title="Centro horizontal" aria-label="Centrar horizontalmente" onClick={() => selectionType === 'multiple' ? alignSelection('centerH') : alignToCanvas('centerH')}><AlignHorizontalJustifyCenter/></button><button title="Derecha" aria-label="Alinear a la derecha" onClick={() => selectionType === 'multiple' ? alignSelection('right') : alignToCanvas('right')}><AlignHorizontalJustifyEnd/></button><button title="Arriba" aria-label="Alinear arriba" onClick={() => selectionType === 'multiple' ? alignSelection('top') : alignToCanvas('top')}><AlignVerticalJustifyStart/></button><button title="Centro vertical" aria-label="Centrar verticalmente" onClick={() => selectionType === 'multiple' ? alignSelection('centerV') : alignToCanvas('centerV')}><AlignVerticalJustifyCenter/></button><button title="Abajo" aria-label="Alinear abajo" onClick={() => selectionType === 'multiple' ? alignSelection('bottom') : alignToCanvas('bottom')}><AlignVerticalJustifyEnd/></button></div>{selectionType === 'multiple' && canCreateMask() && <button className="wide-action" onClick={createMask}><Crop/> Crear máscara de recorte</button>}{selectionType === 'multiple' && <button className="wide-action" onClick={groupSelection}><Group/> Agrupar selección</button>}{selectionType === 'group' && <button className="wide-action" onClick={ungroupSelection}><Ungroup/> Desagrupar</button>}</section>}
+        {selected && <section><h2>Alinear</h2><p className="section-help">{selectionType === 'multiple' ? 'Respecto a la selección' : 'Respecto al lienzo'}</p><div className="align-grid"><button title="Izquierda" aria-label="Alinear a la izquierda" onClick={() => selectionType === 'multiple' ? alignSelection('left') : alignToCanvas('left')}><AlignHorizontalJustifyStart/></button><button title="Centro horizontal" aria-label="Centrar horizontalmente" onClick={() => selectionType === 'multiple' ? alignSelection('centerH') : alignToCanvas('centerH')}><AlignHorizontalJustifyCenter/></button><button title="Derecha" aria-label="Alinear a la derecha" onClick={() => selectionType === 'multiple' ? alignSelection('right') : alignToCanvas('right')}><AlignHorizontalJustifyEnd/></button><button title="Arriba" aria-label="Alinear arriba" onClick={() => selectionType === 'multiple' ? alignSelection('top') : alignToCanvas('top')}><AlignVerticalJustifyStart/></button><button title="Centro vertical" aria-label="Centrar verticalmente" onClick={() => selectionType === 'multiple' ? alignSelection('centerV') : alignToCanvas('centerV')}><AlignVerticalJustifyCenter/></button><button title="Abajo" aria-label="Alinear abajo" onClick={() => selectionType === 'multiple' ? alignSelection('bottom') : alignToCanvas('bottom')}><AlignVerticalJustifyEnd/></button></div>{selectionType === 'multiple' && canCreateMask() && <button className="wide-action" title="El vector superior define el recorte; el resultado será un solo objeto" onClick={createMask}><Crop/> Crear máscara de recorte</button>}{selectionType === 'multiple' && <button className="wide-action" onClick={groupSelection}><Group/> Agrupar selección</button>}{selectionType === 'group' && <button className="wide-action" onClick={ungroupSelection}><Ungroup/> Desagrupar</button>}</section>}
         <section className="layers"><h2><Layers3/> Capas <span>{layers.length}</span></h2><p className="section-help">Arrastra para ordenar · Shift/Ctrl para seleccionar varias · doble clic para renombrar.</p>{layers.length ? layers.map((o, i) => <div key={`${o.type}-${i}`} draggable onDragStart={(e) => e.dataTransfer.setData('text/layer-index', String(i))} onDragOver={(e) => e.preventDefault()} onDrop={(e) => reorderLayer(Number(e.dataTransfer.getData('text/layer-index')), i)} className={`layer-row ${canvas.current?.getActiveObjects().includes(o) ? 'active' : ''}`}><button className="layer-main" onClick={(e) => selectLayer(e, o)} onDoubleClick={() => renameLayer(o)}><span className="layer-icon">{o.type === 'textbox' ? 'T' : o.type === 'image' ? 'IMG' : '◆'}</span><span>{String((o as fabric.FabricObject & { name?: string }).name || (o.type === 'textbox' ? (o as fabric.Textbox).text : `${o.type} ${layers.length - i}`)).slice(0, 18)}</span></button><button aria-label={o.visible ? 'Ocultar capa' : 'Mostrar capa'} onClick={() => toggleLayerVisible(o)}>{o.visible ? <Eye/> : <EyeOff/>}</button><button aria-label={o.selectable === false ? 'Desbloquear capa' : 'Bloquear capa'} onClick={() => toggleLayerLock(o)}>{o.selectable === false ? <Lock/> : <Unlock/>}</button></div>) : <div className="empty">Tu lienzo está vacío.</div>}</section>
         <section><h2>Paleta rápida</h2><div className="swatches">{palette.map((color) => <button key={color} aria-label={`Usar ${color}`} style={{ background: color }} onClick={() => selected ? patchObject({ fill: color }) : undefined}/>)}</div></section>
         {selected && inspector.canStroke && <section><h2>Trazo</h2><label className="field">Color del trazo<input type="color" value={inspector.stroke} onChange={(e) => patchObject({ stroke: e.target.value })}/></label></section>}
