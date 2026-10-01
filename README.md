@@ -58,7 +58,7 @@ El botón **Guardar** y `Ctrl+S` escriben en el navegador; los proyectos guardad
 - **Google Fonts:** carga de tipografías web cuando se solicita desde el editor.
 - **ShapeSoup:** generación de formas y patrones SVG.
 
-Cada recurso puede tener sus propios términos, atribución o licencia. Revisa los avisos y enlaces de la página [Créditos y avisos](/legal) y las condiciones del proveedor antes de publicar diseños que los incluyan.
+Cada recurso puede tener sus propios términos, atribución o licencia. Revisa los avisos y enlaces de la página [Créditos y avisos](https://fragua.rtsi.site/legal) y las condiciones del proveedor antes de publicar diseños que los incluyan.
 
 ## Wiki
 
@@ -68,7 +68,7 @@ La guía de uso está disponible en la ruta `/wiki` al iniciar la aplicación. I
 
 La aplicación muestra una atribución discreta a **.Site de RTSI**, proyecto web de **RTSI.mx**. La estructura y el editor se pueden explorar y ejecutar localmente.
 
-Consulta la sección de licencia para conocer el alcance del código de Fragua. Las licencias de las dependencias y los términos de los recursos externos siguen siendo independientes; sus avisos se resumen en [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) y en la página [Créditos y avisos](/legal).
+Consulta la sección de licencia para conocer el alcance del código de Fragua. Las licencias de las dependencias y los términos de los recursos externos siguen siendo independientes; sus avisos se resumen en [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) y en la página [Créditos y avisos](https://fragua.rtsi.site/legal).
 
 ## Licencia
 
