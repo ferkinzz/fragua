@@ -363,7 +363,21 @@ export default function Editor() {
   }
   async function uploadImage(file?: File) {
     if (!file) return; setStatus('Importando imagen…');
-    try { const asset = await saveAsset(file, file.name); const image = await fabric.FabricImage.fromURL(asset.url); const max = Math.min(700 / (image.width || 1), 700 / (image.height || 1), 1); image.scale(max); add(image); if (canvas.current) attachCrop(canvas.current); setStatus(`Imagen guardada en este navegador · doble clic para recortar`); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude importar esa imagen'); }
+    try {
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+      if (isSvg) {
+        const { objects, options } = await fabric.loadSVGFromString(await file.text());
+        const valid = objects.filter((object): object is fabric.FabricObject => Boolean(object));
+        if (!valid.length) throw new Error('El SVG no contiene formas compatibles para importar');
+        const vector = fabric.util.groupSVGElements(valid, options);
+        const max = Math.min(700 / Math.max(vector.width || 1, vector.height || 1), 1);
+        vector.set({ scaleX: max, scaleY: max, originX: 'center', originY: 'center' });
+        add(vector);
+        setStatus('SVG importado como vector editable');
+        return;
+      }
+      const asset = await saveAsset(file, file.name); const image = await fabric.FabricImage.fromURL(asset.url); const max = Math.min(700 / (image.width || 1), 700 / (image.height || 1), 1); image.scale(max); add(image); if (canvas.current) attachCrop(canvas.current); setStatus(`Imagen guardada en este navegador · doble clic para recortar`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude importar esa imagen'); }
   }
   async function replaceImage(file?: File) { const c = canvas.current; const old = c?.getActiveObject(); if (!file || !c || !old || old.type !== 'image') return; setStatus('Reemplazando imagen…'); try { const asset = await saveAsset(file, file.name); const image = await fabric.FabricImage.fromURL(asset.url); image.set({ left: old.left, top: old.top, originX: old.originX, originY: old.originY, angle: old.angle, opacity: old.opacity, shadow: old.shadow, clipPath: old.clipPath, scaleX: (old.getScaledWidth() / (image.width || 1)), scaleY: (old.getScaledHeight() / (image.height || 1)) }); const oldMask = old as FraguaMaskObject; if (oldMask.fraguaMaskId) (image as FraguaMaskObject).fraguaMaskId = oldMask.fraguaMaskId; (image as fabric.FabricImage & { name?: string }).name = (old as fabric.FabricImage & { name?: string }).name; c.remove(old); c.add(image); c.setActiveObject(image); attachCrop(c); c.requestRenderAll(); snapshot(); syncUi(); setStatus('Imagen reemplazada y guardada en este navegador'); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude reemplazar la imagen'); } }
   async function searchMedia(e?: React.FormEvent) {
@@ -625,7 +639,7 @@ export default function Editor() {
     <div className="workspace">
       <aside className="sidebar left-panel">
         <div className="left-panel-content">
-        <section><h2>Agregar</h2><div className="tool-grid"><button onClick={addText}><Type/><span>Texto</span></button><button onClick={addRect}><Square/><span>Rectángulo</span></button><button onClick={addCircle}><Circle/><span>Círculo</span></button><button onClick={() => setShapeSoupModalOpen(true)}><Waves/><span>Formas</span></button><label className="tool"><ImagePlus/><span>Imagen</span><input type="file" accept="image/*" hidden onChange={(e) => void uploadImage(e.target.files?.[0])}/></label></div></section>
+        <section><h2>Agregar</h2><div className="tool-grid"><button onClick={addText}><Type/><span>Texto</span></button><button onClick={addRect}><Square/><span>Rectángulo</span></button><button onClick={addCircle}><Circle/><span>Círculo</span></button><button onClick={() => setShapeSoupModalOpen(true)}><Waves/><span>Formas</span></button><label className="tool"><ImagePlus/><span>Imagen</span><input type="file" accept="image/*,.svg" hidden onChange={(e) => void uploadImage(e.target.files?.[0])}/></label></div></section>
         <section><h2>Lienzo</h2><label className="field">Formato<select value={SIZES.some((s) => s.w === size.w && s.h === size.h) ? `${size.w}x${size.h}` : 'custom'} onChange={(e) => { if (e.target.value === 'custom') return; const [w,h] = e.target.value.split('x').map(Number); resize(w,h); }}>{SIZES.map((s) => <option key={s.name} value={`${s.w}x${s.h}`}>{s.name} · {s.w}×{s.h}</option>)}<option value="custom">Personalizado · {size.w}×{size.h}</option></select></label><div className="custom-size"><label>Ancho<input type="number" min="64" max="10000" inputMode="numeric" value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label><span>×</span><label>Alto<input type="number" min="64" max="10000" inputMode="numeric" value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label></div><button className="apply-size" onClick={applyCustomSize}>Aplicar tamaño libre</button><button className="secondary-size" onClick={() => void duplicateAndResize()}>Duplicar y redimensionar</button><p className="size-help">De 64 a 10,000 px por lado.</p><label className="field">Fondo<input type="color" value={String(canvas.current?.backgroundColor || '#ffffff')} onChange={(e) => { if (canvas.current) { canvas.current.backgroundColor = e.target.value; canvas.current.requestRenderAll(); snapshot(); } }}/></label></section>
         <section>
           <h2>Biblioteca</h2>
