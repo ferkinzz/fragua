@@ -4,7 +4,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
 import { enterCropMode } from 'fabric/extensions';
-import { AlignCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, BringToFront, ChevronRight, Circle, Copy, Crop, Download, Eye, EyeOff, FilePlus2, FolderOpen, Group, ImagePlus, Layers3, Lock, Magnet, Moon, Pipette, Plus, Redo2, Save, SendToBack, Square, Sun, Trash2, Type, Ungroup, Unlock, Undo2, WandSparkles, X } from 'lucide-react';
+import { AlignCenter, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, BringToFront, ChevronRight, Circle, Copy, Crop, Download, Eye, EyeOff, FilePlus2, FolderOpen, Group, ImagePlus, Info, Layers3, Lock, Magnet, Moon, Pipette, Plus, Redo2, Save, SendToBack, Square, Sun, Trash2, Type, Ungroup, Unlock, Undo2, WandSparkles, X } from 'lucide-react';
 import ColorExtractorModal from './ColorExtractorModal';
 import ImageTraceModal from './ImageTraceModal';
 import ShapeSoupModal from './ShapeSoupModal';
@@ -57,6 +57,27 @@ function isClipMaskShape(object: fabric.FabricObject) {
   if (object.type === 'textbox' || object.type === 'i-text' || isVectorShape(object)) return true;
   return object.type === 'group' && paintTargets(object).every((child) => child.type === 'textbox' || child.type === 'i-text' || isVectorShape(child));
 }
+function parseCanvasColor(value: unknown) {
+  const source = String(value || '#ffffff').trim();
+  const hex = source.match(/^#([\da-f]{3,8})$/i)?.[1];
+  if (hex) {
+    const expanded = hex.length === 3 || hex.length === 4 ? [...hex].map((digit) => digit + digit).join('') : hex;
+    if (expanded.length === 6 || expanded.length === 8) return { color: `#${expanded.slice(0, 6)}`, opacity: expanded.length === 8 ? Math.round(parseInt(expanded.slice(6), 16) / 255 * 100) : 100 };
+  }
+  const rgba = source.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+)%?)?\s*\)$/i);
+  if (rgba) return { color: `#${[1, 2, 3].map((part) => Math.max(0, Math.min(255, Math.round(Number(rgba[Number(part)])))).toString(16).padStart(2, '0')).join('')}`, opacity: rgba[4] === undefined ? 100 : Math.round(Math.max(0, Math.min(1, Number(rgba[4]))) * 100) };
+  return { color: '#ffffff', opacity: 100 };
+}
+function canvasColorWithOpacity(color: string, opacity: number) {
+  const red = parseInt(color.slice(1, 3), 16); const green = parseInt(color.slice(3, 5), 16); const blue = parseInt(color.slice(5, 7), 16);
+  return opacity >= 100 ? color : `rgba(${red}, ${green}, ${blue}, ${Math.max(0, Math.min(100, opacity)) / 100})`;
+}
+function opaqueCanvasColor(value: unknown) {
+  const { color, opacity } = parseCanvasColor(value);
+  const alpha = opacity / 100;
+  const channels = [1, 3, 5].map((start) => Math.round(parseInt(color.slice(start, start + 2), 16) * alpha + 255 * (1 - alpha)));
+  return `rgb(${channels.join(', ')})`;
+}
 (fabric.FabricObject as typeof fabric.FabricObject & { customProperties: string[] }).customProperties = ['name', 'fraguaMaskId', 'fraguaMaskOwnerId'];
 
 export default function Editor() {
@@ -77,6 +98,8 @@ export default function Editor() {
   const loadedGoogleFonts = useRef(new Set<string>());
   const settledFontRequests = useRef(new Set<string>());
   const [name, setName] = useState('Mi diseño');
+  const [backgroundColorInput, setBackgroundColorInput] = useState('#ffffff');
+  const [backgroundOpacity, setBackgroundOpacity] = useState(100);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const themeReady = useRef(false);
   const [projectId, setProjectId] = useState('');
@@ -314,9 +337,15 @@ export default function Editor() {
     } catch { setStatus('No pude leer plantillas o marcas locales'); }
   }
   function setPagesSynced(next: PageData[]) { pagesRef.current = next; setPages(next); }
+  function syncBackgroundInputs(value: unknown) { const parsed = parseCanvasColor(value); setBackgroundColorInput(parsed.color); setBackgroundOpacity(parsed.opacity); }
+  function applyCanvasBackground(color: string, opacity: number) {
+    const c = canvas.current; if (!c) return;
+    const next = canvasColorWithOpacity(color, opacity);
+    c.backgroundColor = next; setBackgroundColorInput(color); setBackgroundOpacity(opacity); c.requestRenderAll(); snapshot();
+  }
   function capturePage(page?: PageData): PageData | null { const c = canvas.current; if (!c) return null; const base = page || pagesRef.current.find((item) => item.id === activePageId) || pagesRef.current[0] || { id: activePageId || `page-${Date.now()}`, name: 'Página 1', w: c.width, h: c.height, bg: '#ffffff', json: { objects: [] } }; return { ...base, w: c.width, h: c.height, bg: String(c.backgroundColor || '#ffffff'), json: c.toJSON() }; }
   function commitCurrentPage() { const current = capturePage(); if (!current) return pagesRef.current; const exists = pagesRef.current.some((item) => item.id === current.id); const next = exists ? pagesRef.current.map((item) => item.id === current.id ? current : item) : [...pagesRef.current, current]; setPagesSynced(next); if (!activePageId) setActivePageId(current.id); return next; }
-  async function openPage(id: string) { const c = canvas.current; const target = pagesRef.current.find((item) => item.id === id); if (!c || !target || id === activePageId) return; commitCurrentPage(); restoring.current = true; c.setDimensions({ width: target.w, height: target.h }); setSize({ w: target.w, h: target.h }); setCustomWidth(String(target.w)); setCustomHeight(String(target.h)); await c.loadFromJSON(target.json); await prepareCanvasFonts(c); c.backgroundColor = target.bg; attachCrop(c); c.requestRenderAll(); restoring.current = false; setActivePageId(id); history.current = []; historyIndex.current = -1; snapshot(); syncUi(); }
+  async function openPage(id: string) { const c = canvas.current; const target = pagesRef.current.find((item) => item.id === id); if (!c || !target || id === activePageId) return; commitCurrentPage(); restoring.current = true; c.setDimensions({ width: target.w, height: target.h }); setSize({ w: target.w, h: target.h }); setCustomWidth(String(target.w)); setCustomHeight(String(target.h)); await c.loadFromJSON(target.json); await prepareCanvasFonts(c); c.backgroundColor = target.bg; syncBackgroundInputs(target.bg); attachCrop(c); c.requestRenderAll(); restoring.current = false; setActivePageId(id); history.current = []; historyIndex.current = -1; snapshot(); syncUi(); }
   function addPage(duplicatePage = false) { const c = canvas.current; if (!c) return; const list = commitCurrentPage(); const page: PageData = { id: `page-${Date.now()}`, name: `Página ${list.length + 1}`, w: c.width, h: c.height, bg: String(c.backgroundColor || '#ffffff'), json: duplicatePage ? c.toJSON() : { version: fabric.version, objects: [], background: String(c.backgroundColor || '#ffffff') } }; setPagesSynced([...list, page]); setActivePageId(page.id); restoring.current = true; c.clear(); c.setDimensions({ width: page.w, height: page.h }); c.backgroundColor = page.bg; if (duplicatePage) void c.loadFromJSON(page.json).then(() => { attachCrop(c); c.requestRenderAll(); restoring.current = false; snapshot(); syncUi(); }); else { c.requestRenderAll(); restoring.current = false; snapshot(); syncUi(); } setStatus(duplicatePage ? 'Página duplicada' : 'Página nueva'); }
   async function deletePage(id: string) { if (pagesRef.current.length === 1) { setStatus('El documento necesita al menos una página'); return; } const index = pagesRef.current.findIndex((item) => item.id === id); const next = pagesRef.current.filter((item) => item.id !== id); setPagesSynced(next); if (id === activePageId) { setActivePageId(''); await openPage(next[Math.max(0, index - 1)].id); } }
   function movePage(id: string, direction: -1 | 1) { const list = [...pagesRef.current]; const from = list.findIndex((item) => item.id === id); const to = from + direction; if (from < 0 || to < 0 || to >= list.length) return; [list[from], list[to]] = [list[to], list[from]]; setPagesSynced(list); }
@@ -583,7 +612,7 @@ export default function Editor() {
       const incoming = await Promise.all(sourcePages.map(async (page) => ({ ...page, json: await hydrateCanvasJSON(page.json) })));
       setPagesSynced(incoming); const first = incoming.find((item) => item.id === data.activePageId) || incoming[0];
       setActivePageId(first.id); restoring.current = true; canvas.current.setDimensions({ width: first.w, height: first.h }); setSize({ w: first.w, h: first.h }); setCustomWidth(String(first.w)); setCustomHeight(String(first.h));
-      await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); attachCrop(canvas.current); canvas.current.backgroundColor = first.bg; canvas.current.requestRenderAll(); restoring.current = false;
+      await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); attachCrop(canvas.current); canvas.current.backgroundColor = first.bg; syncBackgroundInputs(first.bg); canvas.current.requestRenderAll(); restoring.current = false;
       setProjectId(data.id); setName(data.name); savedNameRef.current = data.name; history.current = []; historyIndex.current = -1; snapshot(); syncUi();
       setLastSaved(new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })); setStatus(`Proyecto abierto · ${incoming.length} página${incoming.length === 1 ? '' : 's'}`);
     } catch (error) { restoring.current = false; setStatus(error instanceof Error ? error.message : 'No pude abrir el proyecto'); }
@@ -596,7 +625,7 @@ export default function Editor() {
     const cloned = await Promise.all(sourcePages.map(async (page, index) => ({ ...page, id: `page-${Date.now()}-${index}`, json: await hydrateCanvasJSON(page.json) })));
     setPagesSynced(cloned); const first = cloned[0]; setActivePageId(first.id); restoring.current = true;
     canvas.current.setDimensions({ width: first.w, height: first.h }); setSize({ w: first.w, h: first.h }); setCustomWidth(String(first.w)); setCustomHeight(String(first.h));
-    await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); canvas.current.backgroundColor = first.bg; attachCrop(canvas.current); canvas.current.requestRenderAll(); restoring.current = false;
+    await canvas.current.loadFromJSON(first.json); await prepareCanvasFonts(canvas.current); canvas.current.backgroundColor = first.bg; syncBackgroundInputs(first.bg); attachCrop(canvas.current); canvas.current.requestRenderAll(); restoring.current = false;
     setProjectId(''); savedNameRef.current = ''; setName(`${data.name} copia`); history.current = []; historyIndex.current = -1; snapshot(); syncUi(); setStatus('Plantilla aplicada como documento nuevo');
   }
   async function uploadBrandAssets(files: FileList | null, kind: 'logos' | 'images') { if (!files?.length) return; setBrandSaving(true); try { const uploaded: string[] = []; for (const file of [...files]) uploaded.push((await saveAsset(file, file.name)).url); setBrandDraft((current) => ({ ...current, [kind]: [...current[kind], ...uploaded] })); } catch (error) { setStatus(error instanceof Error ? error.message : 'No pude guardar los recursos de marca'); } finally { setBrandSaving(false); } }
@@ -633,7 +662,7 @@ export default function Editor() {
         c.setDimensions({ width: page.w, height: page.h });
         await c.loadFromJSON(page.json);
         await prepareCanvasFonts(c);
-        c.backgroundColor = page.bg;
+        c.backgroundColor = format === 'jpeg' ? opaqueCanvasColor(page.bg) : page.bg;
         c.discardActiveObject();
         c.requestRenderAll();
         output.push({ page, dataUrl: c.toDataURL({ format, quality: .94, multiplier: 1 }) });
@@ -645,6 +674,7 @@ export default function Editor() {
         await c.loadFromJSON(restore.json);
         await prepareCanvasFonts(c);
         c.backgroundColor = restore.bg;
+        syncBackgroundInputs(restore.bg);
         attachCrop(c);
         c.requestRenderAll();
         setSize({ w: restore.w, h: restore.h });
@@ -766,7 +796,7 @@ export default function Editor() {
       <aside className="sidebar left-panel">
         <div className="left-panel-content">
         <section><h2>Agregar</h2><div className="tool-grid"><button onClick={addText}><Type/><span>Texto</span></button><button onClick={addRect}><Square/><span>Rectángulo</span></button><button onClick={addCircle}><Circle/><span>Círculo</span></button><button onClick={() => setShapeSoupModalOpen(true)}><Waves/><span>Formas</span></button><label className="tool"><ImagePlus/><span>Imagen</span><input type="file" accept="image/*,.svg" hidden onChange={(e) => void uploadImage(e.target.files?.[0])}/></label></div></section>
-        <section><h2>Lienzo</h2><label className="field">Formato<select value={SIZES.some((s) => s.w === size.w && s.h === size.h) ? `${size.w}x${size.h}` : 'custom'} onChange={(e) => { if (e.target.value === 'custom') return; const [w,h] = e.target.value.split('x').map(Number); resize(w,h); }}>{SIZES.map((s) => <option key={s.name} value={`${s.w}x${s.h}`}>{s.name} · {s.w}×{s.h}</option>)}<option value="custom">Personalizado · {size.w}×{size.h}</option></select></label><div className="custom-size"><label>Ancho<input type="number" min="64" max="10000" inputMode="numeric" value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label><span>×</span><label>Alto<input type="number" min="64" max="10000" inputMode="numeric" value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label></div><button className="apply-size" onClick={applyCustomSize}>Aplicar tamaño libre</button><button className="secondary-size" onClick={() => void duplicateAndResize()}>Duplicar y redimensionar</button><p className="size-help">De 64 a 10,000 px por lado.</p><label className="field">Fondo<input type="color" value={String(canvas.current?.backgroundColor || '#ffffff')} onChange={(e) => { if (canvas.current) { canvas.current.backgroundColor = e.target.value; canvas.current.requestRenderAll(); snapshot(); } }}/></label></section>
+        <section><h2>Lienzo</h2><label className="field">Formato<select value={SIZES.some((s) => s.w === size.w && s.h === size.h) ? `${size.w}x${size.h}` : 'custom'} onChange={(e) => { if (e.target.value === 'custom') return; const [w,h] = e.target.value.split('x').map(Number); resize(w,h); }}>{SIZES.map((s) => <option key={s.name} value={`${s.w}x${s.h}`}>{s.name} · {s.w}×{s.h}</option>)}<option value="custom">Personalizado · {size.w}×{size.h}</option></select></label><div className="custom-size"><label>Ancho<input type="number" min="64" max="10000" inputMode="numeric" value={customWidth} onChange={(e) => setCustomWidth(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label><span>×</span><label>Alto<input type="number" min="64" max="10000" inputMode="numeric" value={customHeight} onChange={(e) => setCustomHeight(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyCustomSize(); }}/></label></div><button className="apply-size" onClick={applyCustomSize}>Aplicar tamaño libre</button><button className="secondary-size" onClick={() => void duplicateAndResize()}>Duplicar y redimensionar</button><p className="size-help">De 64 a 10,000 px por lado.</p><label className="field background-color-control">Fondo<input type="color" value={backgroundColorInput} onChange={(e) => applyCanvasBackground(e.target.value, backgroundOpacity)}/></label><label className="field background-opacity-control">Opacidad <span>{backgroundOpacity}%</span><input type="range" min="0" max="100" value={backgroundOpacity} aria-label="Opacidad del fondo del lienzo" onChange={(e) => applyCanvasBackground(backgroundColorInput, Number(e.target.value))}/></label><p className="canvas-frame-note"><Info aria-hidden="true"/> El marco no se exporta.</p></section>
         <section>
           <h2>Biblioteca</h2>
           <div className="media-tabs"><button className={mediaMode === 'photos' ? 'active' : ''} onClick={() => setMediaMode('photos')}>Fotos</button><button className={mediaMode === 'icons' ? 'active' : ''} onClick={() => setMediaMode('icons')}>Iconos</button></div>

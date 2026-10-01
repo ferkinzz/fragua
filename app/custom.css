@@ -492,3 +492,11 @@ body:has(.app-shell[data-theme="dark"]) { background: #25262d; color: #eeeeF2; }
 .app-shell[data-theme="dark"] .theme-toggle { width: 42px; min-width: 42px; padding: 0; justify-content: center; }
 .app-shell[data-theme="dark"] .theme-toggle svg,
 .app-shell:not([data-theme="dark"]) .theme-toggle svg { width: 18px; height: 18px; }
+
+.canvas-frame { position: relative; isolation: isolate; background: transparent; }
+.canvas-frame::before,.canvas-frame::after { content: ""; position: absolute; pointer-events: none; }
+.canvas-frame::before { z-index: 2; inset: -2px; border: 1px solid #25262d; box-shadow: 0 0 0 1px rgba(255,255,255,.95); }
+.canvas-frame::after { z-index: 3; inset: 0; border: 1px solid rgba(255,255,255,.96); }
+.canvas-frame-note { display: flex; align-items: center; gap: 6px; margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+.canvas-frame-note svg { width: 14px; height: 14px; flex: none; }
+.background-opacity-control input[type="range"] { accent-color: var(--accent); }
