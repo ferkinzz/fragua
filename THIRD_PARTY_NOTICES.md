@@ -28,7 +28,3 @@ La tabla no es un inventario exhaustivo de dependencias transitivas, opcionales 
 Fragua puede consultar Pexels, Iconify y Google Fonts. Las fotos, iconos y tipografías que se elijan o incorporen conservan sus propios términos, atribuciones y restricciones; no quedan relicenciados bajo MPL-2.0 por usarse en Fragua. Quien publique un diseño debe verificar los derechos de cada recurso concreto.
 
 El script `scripts/create-sibila-rollup.mjs` incluye contenido de un proyecto específico y una ruta a un logotipo externo. No lleva aviso MPL y no se incluye en la concesión de licencia de Fragua mientras no se confirme la autorización para redistribuir ese material.
-
-## Modelo de eliminación de fondo
-
-La función «Quitar fondo» carga [Transformers.js 4.3.0](https://github.com/huggingface/transformers) desde jsDelivr cuando se abre la herramienta y usa [BiRefNet Lite ONNX](https://huggingface.co/onnx-community/BiRefNet_lite-ONNX), publicado bajo MIT. El modelo se descarga desde Hugging Face la primera vez que se usa y queda en la caché del navegador. La inferencia se ejecuta en el dispositivo; las imágenes seleccionadas no se envían a esos servicios.
