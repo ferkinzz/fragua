@@ -29,6 +29,8 @@ const BRAND_PALETTES = [
   { name: 'Nocturna', colors: ['#0b1020', '#202a44', '#7357ff', '#21d4a4', '#f5f7ff'] },
 ];
 const TEXT_STYLE_KEYS = new Set(['fill', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'underline', 'stroke', 'strokeWidth']);
+const FRAGUA_CLIPBOARD_KEY = 'fragua.object-clipboard.v1';
+type FraguaClipboardPayload = { fraguaClipboard: 1; object: object };
 function paintableColor(value: unknown): value is string { return typeof value === 'string' && /^#[\da-f]{3,8}$/i.test(value); }
 function exportSafeJSON(value: object) {
   const copy = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
@@ -571,6 +573,49 @@ export default function Editor() {
   }
   function remove() { const c = canvas.current; if (!c) return; c.getActiveObjects().forEach((o) => c.remove(o)); c.discardActiveObject(); c.requestRenderAll(); syncUi(); }
   async function duplicate() { const c = canvas.current; const active = c?.getActiveObject(); if (!c || !active) return; const clone = await active.clone(); clone.set({ left: (active.left ?? 0) + 28, top: (active.top ?? 0) + 28 }); if (clone.type === 'image' && (clone as FraguaMaskObject).fraguaMaskId) (clone as FraguaMaskObject).fraguaMaskId = `mask-${crypto.randomUUID()}`; c.add(clone); c.setActiveObject(clone); c.requestRenderAll(); }
+  async function copySelection() {
+    const active = canvas.current?.getActiveObject();
+    if (!active) return setStatus('Selecciona uno o varios elementos para copiar');
+    const payload: FraguaClipboardPayload = { fraguaClipboard: 1, object: exportSafeJSON(active.toObject()) };
+    const serialized = JSON.stringify(payload);
+    window.localStorage.setItem(FRAGUA_CLIPBOARD_KEY, serialized);
+    try { await navigator.clipboard?.writeText(serialized); } catch { /* La copia entre pestañas sigue disponible mediante localStorage. */ }
+    const count = active.type === 'activeselection' ? (active as fabric.ActiveSelection).getObjects().length : 1;
+    setStatus(`${count} ${count === 1 ? 'elemento copiado' : 'elementos copiados'} · listo para pegar en otra pestaña`);
+  }
+  async function pasteSelection() {
+    const c = canvas.current;
+    if (!c) return;
+    let serialized = window.localStorage.getItem(FRAGUA_CLIPBOARD_KEY) || '';
+    try {
+      const systemClipboard = await navigator.clipboard?.readText();
+      if (systemClipboard) {
+        const candidate = JSON.parse(systemClipboard) as Partial<FraguaClipboardPayload>;
+        if (candidate.fraguaClipboard === 1 && candidate.object) serialized = systemClipboard;
+      }
+    } catch { /* Usa la copia local compartida entre pestañas si el navegador niega lectura. */ }
+    if (!serialized) return setStatus('No hay elementos de Fragua en el portapapeles');
+    try {
+      const payload = JSON.parse(serialized) as Partial<FraguaClipboardPayload>;
+      if (payload.fraguaClipboard !== 1 || !payload.object) throw new Error('El portapapeles no contiene objetos de Fragua');
+      const hydrated = await hydrateCanvasJSON(payload.object);
+      const [restored] = await fabric.util.enlivenObjects<fabric.FabricObject>([hydrated]);
+      if (!restored) throw new Error('No pude reconstruir los elementos copiados');
+      restored.set({ left: Number(restored.left || 0) + 28, top: Number(restored.top || 0) + 28 });
+      restored.setCoords();
+      let pasted: fabric.FabricObject[];
+      if (restored.type === 'activeselection') pasted = (restored as fabric.ActiveSelection).removeAll();
+      else pasted = [restored];
+      c.discardActiveObject();
+      c.add(...pasted);
+      pasted.forEach((object) => object.setCoords());
+      c.setActiveObject(pasted.length === 1 ? pasted[0] : new fabric.ActiveSelection(pasted, { canvas: c }));
+      c.requestRenderAll(); snapshot(); syncUi();
+      setStatus(`${pasted.length} ${pasted.length === 1 ? 'elemento pegado' : 'elementos pegados'} desde el portapapeles`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'No pude pegar los elementos');
+    }
+  }
   async function travel(delta: number) { const c = canvas.current; const next = historyIndex.current + delta; if (!c || next < 0 || next >= history.current.length) return; restoring.current = true; historyIndex.current = next; await c.loadFromJSON(history.current[next]); await prepareCanvasFonts(c); attachCrop(c); c.requestRenderAll(); restoring.current = false; setCanUndo(next > 0); setCanRedo(next < history.current.length - 1); syncUi(); }
   function patchObject(values: Record<string, unknown>) { const c = canvas.current; const o = c?.getActiveObject(); if (!c || !o) return; const family = values.fontFamily; if (typeof family === 'string' && GOOGLE_FONTS.includes(family) && !settledFontRequests.current.has(family)) { setStatus(`Cargando ${family}…`); void ensureGoogleFont(family).then((loaded) => { settledFontRequests.current.add(family); if (canvas.current?.getActiveObject() !== o) return; if (!loaded) setStatus(`No pude conectar con Google Fonts; se usará una fuente alternativa a ${family}`); patchObject(values); }); return; } const text = o.type === 'textbox' || o.type === 'i-text' ? o as fabric.IText : null; const isRange = Boolean(text?.isEditing && text.selectionStart !== text.selectionEnd); const isTextStyle = Object.keys(values).every((key) => TEXT_STYLE_KEYS.has(key)); if (text && isRange && isTextStyle) text.setSelectionStyles(values as fabric.TextStyleDeclaration); else if (o.type === 'group' || o.type === 'activeselection') { const targets = paintTargets(o); Object.entries(values).forEach(([key, value]) => { if (key === 'fill') targets.filter((object) => paintableColor(object.fill)).forEach((object) => object.set({ fill: value })); else if (key === 'stroke') targets.filter(isVectorShape).forEach((object) => object.set({ stroke: value })); else if (key === 'strokeWidth' || key === 'strokeUniform') targets.filter(isVectorShape).forEach((object) => object.set({ [key]: value })); else o.set({ [key]: value }); }); } else o.set(values); if (text) text.initDimensions(); o.setCoords(); o.dirty = true; c.requestRenderAll(); snapshot(); syncUi(); }
   function applyRadius(value: number) { const c = canvas.current; const o = c?.getActiveObject(); if (!c || !o) return; const radius = Math.min(Number(o.width || 1), Number(o.height || 1)) / 2 * value / 100; if (o.type === 'rect') (o as fabric.Rect).set({ rx: radius, ry: radius }); else if (o.type === 'image' && !(o as FraguaMaskObject).fraguaMaskId) o.set({ clipPath: value === 0 ? undefined : new fabric.Rect({ width: o.width, height: o.height, rx: radius, ry: radius, originX: 'center', originY: 'center' }) }); o.setCoords(); c.requestRenderAll(); snapshot(); syncUi(); }
@@ -782,7 +827,7 @@ export default function Editor() {
     finally { setBackupBusy(false); if (backupFileRef.current) backupFileRef.current.value = ''; }
   }
 
-  useEffect(() => { const key = (e: KeyboardEvent) => { const target = e.target instanceof HTMLElement ? e.target : null; if (target?.matches('input, textarea, select, [contenteditable="true"]')) return; const command = e.ctrlKey || e.metaKey; const keyName = e.key.toLowerCase(); if (command && (keyName === 'z' || e.code === 'KeyZ')) { e.preventDefault(); void travel(e.shiftKey ? 1 : -1); return; } if (command && (keyName === 'y' || e.code === 'KeyY')) { e.preventDefault(); void travel(1); return; } if (command && keyName === 's') { e.preventDefault(); void saveProject(); return; } if (command && keyName === 'd') { e.preventDefault(); void duplicate(); return; } if (e.key === 'Delete' || e.key === 'Backspace') remove(); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); });
+  useEffect(() => { const key = (e: KeyboardEvent) => { const target = e.target instanceof HTMLElement ? e.target : null; if (target?.matches('input, textarea, select, [contenteditable="true"]')) return; const command = e.ctrlKey || e.metaKey; const keyName = e.key.toLowerCase(); if (command && (keyName === 'z' || e.code === 'KeyZ')) { e.preventDefault(); void travel(e.shiftKey ? 1 : -1); return; } if (command && (keyName === 'y' || e.code === 'KeyY')) { e.preventDefault(); void travel(1); return; } if (command && keyName === 's') { e.preventDefault(); void saveProject(); return; } if (command && keyName === 'c') { e.preventDefault(); void copySelection(); return; } if (command && keyName === 'v') { e.preventDefault(); void pasteSelection(); return; } if (command && keyName === 'd') { e.preventDefault(); void duplicate(); return; } if (e.key === 'Delete' || e.key === 'Backspace') remove(); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); });
   useEffect(() => { const timer = window.setInterval(() => { if (projectId) void saveProject(true); }, 60_000); return () => window.clearInterval(timer); });
   useEffect(() => { if (!brandModalOpen) return; const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setBrandModalOpen(false); }; const previous = document.body.style.overflow; document.body.style.overflow = 'hidden'; window.addEventListener('keydown', close); return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', close); }; }, [brandModalOpen]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
