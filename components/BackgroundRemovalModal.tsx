@@ -6,8 +6,8 @@ import { Eraser, X } from 'lucide-react';
 
 type Props = { source: HTMLCanvasElement; onClose: () => void; onInsert: (image: Blob) => Promise<void> };
 type ProgressInfo = { status?: string; progress?: number };
-type RawImage = { width: number; height: number; channels: number; data: Uint8Array };
-type ModelRunner = (image: HTMLCanvasElement) => Promise<RawImage>;
+type AlphaMask = { width: number; height: number; data: Uint8Array };
+type ModelRunner = (image: HTMLCanvasElement) => Promise<AlphaMask>;
 
 let runnerPromise: Promise<ModelRunner> | null = null;
 
@@ -18,33 +18,61 @@ function getModelRunner(onProgress: (progress: ProgressInfo) => void): Promise<M
       // Pages rejects the 25.6 MiB threaded WASM; native import fetches the runtime
       // from jsDelivr only when the user opens this tool.
       const runtimeUrl = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/+esm';
-      const { pipeline } = await import(/* webpackIgnore: true */ runtimeUrl);
+      const { AutoModel, AutoProcessor } = await import(/* webpackIgnore: true */ runtimeUrl);
       const device = 'gpu' in navigator ? 'webgpu' : 'wasm';
-      try {
-        // MODNet's model card recommends fp32 for portrait matting; the smaller
-        // quantized weights can make fine edges (hair, fabric) noticeably rough.
-        const remover = await pipeline('background-removal', 'Xenova/modnet', { device, dtype: 'fp32', progress_callback: onProgress });
-        return (image: HTMLCanvasElement) => remover(image);
-      } catch (error) {
+      const loadRunner = async (selectedDevice: 'webgpu' | 'wasm'): Promise<ModelRunner> => {
+        const modelId = 'onnx-community/BiRefNet_lite-ONNX';
+        const dtype = selectedDevice === 'webgpu' ? 'fp16' : 'fp32';
+        const model = await AutoModel.from_pretrained(modelId, { device: selectedDevice, dtype, progress_callback: onProgress });
+        const processor = await AutoProcessor.from_pretrained(modelId, { progress_callback: onProgress });
+        return async (image: HTMLCanvasElement) => {
+          const { pixel_values } = await processor(image);
+          const { output_image } = await model({ input_image: pixel_values });
+          const alpha = output_image[0].sigmoid().mul(255).to('uint8');
+          const [height, width] = alpha.dims.slice(-2);
+          if (!width || !height) throw new Error('BiRefNet no devolvió una máscara válida.');
+          return { width, height, data: alpha.data };
+        };
+      };
+      try { return await loadRunner(device); }
+      catch (error) {
         if (device !== 'webgpu') throw error;
-        const remover = await pipeline('background-removal', 'Xenova/modnet', { device: 'wasm', dtype: 'fp32', progress_callback: onProgress });
-        return (image: HTMLCanvasElement) => remover(image);
+        return loadRunner('wasm');
       }
     })().catch((error) => { runnerPromise = null; throw error; });
   }
   return runnerPromise;
 }
 
-function rawImageToPng(image: RawImage): Promise<Blob> {
-  if (image.channels !== 4) throw new Error('El modelo no devolvió una imagen con transparencia.');
+function maskToPng(source: HTMLCanvasElement, mask: AlphaMask): Promise<Blob> {
+  const sourceContext = source.getContext('2d', { willReadFrequently: true });
+  if (!sourceContext) throw new Error('No pude leer la imagen original.');
+  const sourcePixels = sourceContext.getImageData(0, 0, source.width, source.height);
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = mask.width;
+  maskCanvas.height = mask.height;
+  const maskContext = maskCanvas.getContext('2d');
+  if (!maskContext) throw new Error('No pude preparar la máscara del recorte.');
+  const maskPixels = maskContext.createImageData(mask.width, mask.height);
+  for (let index = 0; index < mask.data.length; index += 1) {
+    const pixel = index * 4;
+    maskPixels.data[pixel] = 255;
+    maskPixels.data[pixel + 1] = 255;
+    maskPixels.data[pixel + 2] = 255;
+    maskPixels.data[pixel + 3] = mask.data[index];
+  }
+  maskContext.putImageData(maskPixels, 0, 0);
   const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
+  canvas.width = source.width;
+  canvas.height = source.height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('El navegador no pudo preparar el resultado.');
-  const pixels = context.createImageData(image.width, image.height);
-  pixels.data.set(image.data);
-  context.putImageData(pixels, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(maskCanvas, 0, 0, source.width, source.height);
+  const scaledMask = context.getImageData(0, 0, source.width, source.height);
+  for (let index = 0; index < sourcePixels.data.length; index += 4) sourcePixels.data[index + 3] = scaledMask.data[index + 3];
+  context.putImageData(sourcePixels, 0, 0);
   return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('No pude generar el PNG transparente.')), 'image/png'));
 }
 
@@ -74,8 +102,8 @@ export default function BackgroundRemovalModal({ source, onClose, onInsert }: Pr
         });
         if (cancelled) return;
         setPhase('processing');
-        const transparentPng = await runner(source);
-        const blob = await rawImageToPng(transparentPng);
+        const alphaMask = await runner(source);
+        const blob = await maskToPng(source, alphaMask);
         if (cancelled) return;
         setResult(blob);
         setPreview(URL.createObjectURL(blob));
@@ -103,7 +131,7 @@ export default function BackgroundRemovalModal({ source, onClose, onInsert }: Pr
     <section className="trace-modal bg-remove-modal" role="dialog" aria-modal="true" aria-labelledby="bg-remove-title" aria-describedby="bg-remove-help" aria-busy={busy}>
       <header><div><span>Herramienta de imagen</span><h2 id="bg-remove-title">Quitar fondo</h2></div><button ref={closeButton} type="button" aria-label="Cerrar quitafondos" onClick={onClose} disabled={busy}><X/></button></header>
       <div className="trace-modal-body">
-        <p id="bg-remove-help" className="trace-modal-help">MODNet detecta personas y crea un PNG transparente. La imagen se procesa en tu dispositivo; el modelo se descarga la primera vez y queda en la caché del navegador.</p>
+        <p id="bg-remove-help" className="trace-modal-help">BiRefNet Lite genera una máscara de recorte con bordes suaves. El modelo se descarga una vez (aprox. 115 MB con GPU; hasta 224 MB sin GPU); la imagen se procesa en tu dispositivo.</p>
         <div className="trace-previews">
           <figure><figcaption>Original</figcaption>{sourcePreview ? <img src={sourcePreview} alt="Imagen original"/> : <div className="trace-placeholder">Preparando imagen…</div>}</figure>
           <figure><figcaption>Fondo transparente</figcaption>{preview ? <img src={preview} alt="Resultado con el fondo eliminado"/> : <div className="trace-placeholder" role="status">{busy ? status : error || 'El resultado aparecerá aquí.'}</div>}</figure>

@@ -31,4 +31,4 @@ El script `scripts/create-sibila-rollup.mjs` incluye contenido de un proyecto es
 
 ## Modelo de eliminación de fondo
 
-La función «Quitar fondo» carga [Transformers.js 4.3.0](https://github.com/huggingface/transformers) desde jsDelivr cuando se abre la herramienta y usa [Xenova/modnet](https://huggingface.co/Xenova/modnet), publicado bajo Apache-2.0. El modelo se descarga desde Hugging Face la primera vez que se usa y queda en la caché del navegador. La inferencia se ejecuta en el dispositivo; las imágenes seleccionadas no se envían a esos servicios.
+La función «Quitar fondo» carga [Transformers.js 4.3.0](https://github.com/huggingface/transformers) desde jsDelivr cuando se abre la herramienta y usa [BiRefNet Lite ONNX](https://huggingface.co/onnx-community/BiRefNet_lite-ONNX), publicado bajo MIT. El modelo se descarga desde Hugging Face la primera vez que se usa y queda en la caché del navegador. La inferencia se ejecuta en el dispositivo; las imágenes seleccionadas no se envían a esos servicios.
