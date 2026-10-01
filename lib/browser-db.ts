@@ -13,6 +13,7 @@ export type ProjectRecord = {
 export type AssetRecord = { id: string; name: string; type: string; blob: Blob; createdAt: string };
 export type LibraryRecord = { id: string; name: string; updatedAt: string; [key: string]: unknown };
 
+// SPDX-License-Identifier: MPL-2.0
 const DB_NAME = 'fragua-browser';
 const DB_VERSION = 1;
 const TABLES = ['projects', 'assets', 'templates', 'brands'] as const;

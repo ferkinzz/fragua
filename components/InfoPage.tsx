@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';

@@ -68,7 +68,19 @@ La guía de uso está disponible en la ruta `/wiki` al iniciar la aplicación. I
 
 La aplicación muestra una atribución discreta a **.Site de RTSI**, proyecto web de **RTSI.mx**. La estructura y el editor se pueden explorar y ejecutar localmente.
 
-Este repositorio todavía no declara una licencia propia. Las licencias de las dependencias no determinan los permisos sobre el código de Fragua; antes de invitar a reutilizarlo o distribuir forks, el mantenedor debe elegir y añadir una licencia raíz. La página [Créditos y avisos](/legal) resume las dependencias y servicios utilizados.
+Consulta la sección de licencia para conocer el alcance del código de Fragua. Las licencias de las dependencias y los términos de los recursos externos siguen siendo independientes; sus avisos se resumen en [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) y en la página [Créditos y avisos](/legal).
+
+## Licencia
+
+El código fuente de Fragua identificado con el aviso `SPDX-License-Identifier: MPL-2.0` se distribuye bajo la Mozilla Public License 2.0 (MPL-2.0).
+
+Puedes usar, modificar y distribuir ese código, incluso con fines comerciales, de acuerdo con los términos de la MPL-2.0. Consulta el archivo [LICENSE](./LICENSE) para conocer los términos completos.
+
+Las dependencias, recursos externos y otros materiales que no estén identificados como código cubierto por Fragua conservan sus propias licencias y condiciones. En particular, `scripts/create-sibila-rollup.mjs` contiene contenido y referencias a recursos de un proyecto de cliente; se excluye de esta concesión mientras no se confirme que se cuenta con los derechos necesarios.
+
+## Marca
+
+La licencia del código fuente no concede derechos sobre los nombres, logotipos ni identidad visual de Fragua o RTSI. Estos elementos no se ofrecen bajo MPL-2.0 y pertenecen a sus respectivos titulares.
 
 ## Autoría y agradecimientos
 

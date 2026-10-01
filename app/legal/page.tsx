@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 import InfoPage from '@/components/InfoPage';
 import type { Metadata } from 'next';
 

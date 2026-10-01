@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

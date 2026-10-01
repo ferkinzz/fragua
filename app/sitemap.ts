@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 import type { MetadataRoute } from 'next';
 
 export const dynamic = 'force-static';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 import JSZip from 'jszip';
 import { createRecordId, importAsset, listAssets, listLibrary, listProjects, saveLibrary, saveProject, stableAssetReference, type LibraryRecord, type ProjectRecord } from './browser-db';
 
