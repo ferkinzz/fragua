@@ -17,7 +17,7 @@ function getModelRunner(onProgress: (progress: ProgressInfo) => void): Promise<M
       // Keep Transformers.js and its ONNX WASM out of Next's static asset graph.
       // Pages rejects the 25.6 MiB threaded WASM; native import fetches the runtime
       // from jsDelivr only when the user opens this tool.
-      const runtimeUrl = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.web.js';
+      const runtimeUrl = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/+esm';
       const { pipeline } = await import(/* webpackIgnore: true */ runtimeUrl);
       const device = 'gpu' in navigator ? 'webgpu' : 'wasm';
       try {
